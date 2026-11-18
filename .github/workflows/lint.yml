@@ -16,6 +16,8 @@ jobs:
       - run: pip install ansible-core ansible-lint yamllint shellcheck-py
       - run: make deps
       - run: make lint
+      - name: Client auto-attach tests
+        run: tests/client/test-autoattach.sh
 
   # Run the boot-partition script on every OS you might flash from,
   # against a fake bootfs folder, and check the result parses as YAML.
