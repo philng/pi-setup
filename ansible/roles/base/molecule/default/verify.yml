@@ -69,8 +69,8 @@
       changed_when: false
       failed_when: base_verify_f2b.rc != 0 or 'Currently banned' not in base_verify_f2b.stdout
 
-    - name: Fail2ban uses nftables and the journal
-      ansible.builtin.command: fail2ban-client get sshd banaction
+    - name: Fail2ban bans with nftables
+      ansible.builtin.command: fail2ban-client get sshd actions
       register: base_verify_f2b_action
       changed_when: false
       failed_when: "'nftables' not in base_verify_f2b_action.stdout"
