@@ -1,0 +1,44 @@
+---
+# Temporary probe: can GitHub's ARM runner boot Pi OS as a KVM virt VM?
+name: kvm-probe
+on:
+  push:
+    branches: [kvm-probe]
+jobs:
+  probe:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 12
+    steps:
+      - name: KVM on this runner?
+        run: |
+          uname -a; nproc
+          ls -l /dev/kvm || echo "NO /dev/kvm"
+          grep -o -m1 -w -E 'vmx|svm' /proc/cpuinfo || true
+          dmesg 2>/dev/null | grep -i kvm | head || sudo dmesg | grep -i kvm | head || true
+      - name: Does the Pi OS kernel have virt/virtio drivers?
+        run: |
+          set -x
+          url=$(curl -fsSIL -o /dev/null -w '%{url_effective}' https://downloads.raspberrypi.com/raspios_lite_arm64_latest)
+          curl -fsSL "$url" | xz -dc > pi.img
+          lp=$(sudo losetup -Pf --show pi.img)
+          mkdir -p r && sudo mount -o ro "${lp}p2" r
+          ls r/boot/ | grep -E 'config|vmlinuz|initrd' || true
+          for c in r/boot/config-*; do
+            echo "== $c"
+            grep -E '^CONFIG_(VIRTIO|VIRTIO_MMIO|VIRTIO_PCI|VIRTIO_BLK|VIRTIO_NET|PCI_HOST_GENERIC|ARM_GIC_V3|ARCH_VIRT|SERIAL_AMBA_PL011|RTC_DRV_PL031|ARM_PSCI_FW)=' "$c" || true
+          done
+          sudo umount r; sudo losetup -d "$lp"
+      - name: Try booting kernel8 on virt with KVM (60s)
+        if: always()
+        run: |
+          sudo apt-get install -y -qq qemu-system-arm >/dev/null
+          [ -e /dev/kvm ] && sudo chmod 666 /dev/kvm
+          lp=$(sudo losetup -Pf --show pi.img); mkdir -p b; sudo mount -o ro "${lp}p1" b
+          cp b/kernel8.img b/initramfs8 . 2>/dev/null || cp b/kernel8.img .; sudo umount b; sudo losetup -d "$lp"
+          accel=tcg; [ -w /dev/kvm ] && accel=kvm
+          timeout 60 qemu-system-aarch64 -M virt -accel $accel -cpu max -m 1G -smp 2 \
+            -kernel kernel8.img $( [ -f initramfs8 ] && echo -initrd initramfs8 ) \
+            -append "console=ttyAMA0 root=/dev/vda2 rootwait" \
+            -drive file=pi.img,if=virtio,format=raw,snapshot=on \
+            -nographic 2>&1 | tail -n 60 || true
+          echo "accel=$accel"
