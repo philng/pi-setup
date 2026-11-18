@@ -1,0 +1,27 @@
+---
+- name: Use chrony for time sync (replaces systemd-timesyncd)
+  ansible.builtin.systemd_service:
+    name: chrony
+    enabled: true
+    state: started
+
+- name: Create systemd manager drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Hardware watchdog (reboot if the Pi hangs)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system.conf.d/10-watchdog.conf
+    content: |
+      # Managed by Ansible (base role)
+      [Manager]
+      RuntimeWatchdogSec={{ base_watchdog_sec }}
+      RebootWatchdogSec=2min
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Re-exec systemd
