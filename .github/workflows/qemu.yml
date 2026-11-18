@@ -39,4 +39,4 @@ jobs:
         run: tests/qemu/run.sh
       - name: Serial console log
         if: always()
-        run: tail -n 200 .cache/qemu/serial.log || true
+        run: tail -n 200 .cache/qemu/serial.log .cache/qemu/serial1.log || true

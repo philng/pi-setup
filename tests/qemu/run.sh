@@ -12,6 +12,7 @@ WORK=${WORK:-$REPO_ROOT/.cache/qemu}
 IMAGE_URL=${IMAGE_URL:-https://downloads.raspberrypi.com/raspios_lite_arm64_latest}
 SSH_PORT=${SSH_PORT:-2222}
 BOOT_TIMEOUT=${BOOT_TIMEOUT:-1500}
+EARLY_CHECK=${EARLY_CHECK:-240}
 mkdir -p "$WORK"
 cd "$WORK"
 
@@ -60,7 +61,7 @@ cp boot/kernel8.img boot/bcm2710-rpi-3-b-plus.dtb .
 initrd_args=()
 if [[ -f boot/initramfs8 ]]; then cp boot/initramfs8 .; initrd_args=(-initrd initramfs8); fi
 cmdline=$(sed -e 's/console=[^ ]*//g' -e 's/\bquiet\b//' boot/cmdline.txt | tr -s ' ')
-cmdline="$cmdline console=ttyAMA0,115200 dwc_otg.fiq_fsm_enable=0"
+cmdline="$cmdline earlycon=pl011,0x3f201000 console=ttyAMA0,115200 console=ttyS1,115200 loglevel=7 dwc_otg.fiq_fsm_enable=0"
 echo "cmdline: $cmdline"
 sudo umount boot
 sudo losetup -d "$loop"
@@ -73,15 +74,25 @@ qemu-system-aarch64 -M raspi3b -m 1G -smp 4 \
   -append "$cmdline" \
   -drive file=pi.img,if=sd,format=raw \
   -device usb-net,netdev=net0 -netdev user,id=net0,hostfwd=tcp::"$SSH_PORT"-:22 \
-  -display none -serial file:serial.log -daemonize -pidfile qemu.pid
+  -display none -serial file:serial.log -serial file:serial1.log \
+  -daemonize -pidfile qemu.pid
+qemu-system-aarch64 --version | head -1
+ls -l kernel8.img bcm2710-rpi-3-b-plus.dtb; file kernel8.img || true
 
 SSH=(ssh -i id_ci -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
      -o ConnectTimeout=10 -o BatchMode=yes admin@127.0.0.1)
 deadline=$((SECONDS + BOOT_TIMEOUT))
 until "${SSH[@]}" 'cloud-init status --wait >/dev/null 2>&1; true' 2>/dev/null; do
   if (( SECONDS > deadline )); then
-    echo "Pi did not come up over SSH within ${BOOT_TIMEOUT}s. Serial log tail:"
-    tail -n 80 serial.log
+    echo "Pi did not come up over SSH within ${BOOT_TIMEOUT}s. Serial log tails:"
+    ls -l serial.log serial1.log
+    tail -n 80 serial.log; echo ----; tail -n 80 serial1.log
+    exit 1
+  fi
+  # Fail fast if the kernel printed nothing at all after a few minutes.
+  if (( SECONDS > EARLY_CHECK )) && [[ ! -s serial.log && ! -s serial1.log ]]; then
+    echo "No console output after ${EARLY_CHECK}s: kernel did not start under QEMU."
+    file kernel8.img || true
     exit 1
   fi
   sleep 15
