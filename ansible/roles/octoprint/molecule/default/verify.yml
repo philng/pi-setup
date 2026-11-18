@@ -83,7 +83,10 @@
       become: true
       become_user: "{{ podman_user }}"
       environment: "{{ octoprint_verify_env }}"
-      ansible.builtin.command: podman exec octoprint grep -c 'OctoEverywhere (' /octoprint/octoprint/logs/octoprint.log
+      # The startup log lists plugins as "|  OctoEverywhere! (5.4.1) = <path>".
+      ansible.builtin.command: >-
+        podman exec octoprint grep -cE '\| +OctoEverywhere!? \('
+        /octoprint/octoprint/logs/octoprint.log
       register: octoprint_verify_oe_loaded
       changed_when: false
       until: octoprint_verify_oe_loaded.rc == 0
