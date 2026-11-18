@@ -95,6 +95,10 @@ NET
   sudo sed -i -E 's/ ?\bresize\b//' boot/cmdline.txt
   cp boot/kernel8.img boot/bcm2710-rpi-3-b-plus.dtb .
   [[ -f boot/initramfs8 ]] && cp boot/initramfs8 .
+  echo "cmdline.txt: $(cat boot/cmdline.txt)"
+  if [[ -f initramfs8 ]] && command -v lsinitramfs >/dev/null; then
+    echo "initramfs boot scripts:"; lsinitramfs initramfs8 | grep -E '^(usr/)?scripts/' | sort || true
+  fi
   make_cmdline boot/cmdline.txt
   sudo umount boot
   sudo e2fsck -fy "${loop}p2" >/dev/null || [[ $? -le 1 ]]
@@ -138,9 +142,9 @@ wait_for_ssh() {
       exit 1
     fi
     # A guest reboot hangs under raspi3b; don't wait out the timeout for it.
-    if (( $(cat serial.log serial1.log 2>/dev/null | grep -c 'Booting Linux') > 1 )); then
-      echo "The guest rebooted, which hangs under QEMU's raspi3b. Serial log tail:"
-      tail -n 60 serial.log
+    if (( $(grep -c 'Booting Linux' serial.log 2>/dev/null) > 1 )); then
+      echo "The guest rebooted, which hangs under QEMU's raspi3b. What it printed before the reboot:"
+      awk '/Booting Linux/ && ++n == 2 {exit} {print}' serial.log | tail -n 100
       exit 1
     fi
     # Fail fast if the kernel printed nothing at all after a few minutes.
