@@ -196,6 +196,17 @@ else
 fi
 "${SSH[@]}" 'cat /proc/device-tree/model; echo; uname -a; hostname'
 
+log "Let the guest's own apt jobs finish"
+# A fresh boot starts apt-daily/unattended-upgrades, which is very slow under
+# emulation and holds the dpkg lock. Stop the timers and wait for any run.
+"${SSH[@]}" 'sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer
+  # [x] keeps the pattern from matching this shell; the upgrade-shutdown helper
+  # that is always running does not match either.
+  busy="bin/[u]nattended-upgrade( |\$)|apt[.]systemd[.]daily|^/usr/bin/[d]pkg "
+  for _ in $(seq 1 90); do pgrep -f "$busy" >/dev/null || break; sleep 10; done
+  pgrep -af "$busy" || echo "apt is idle"' || true
+endlog
+
 log "Apply site.yml (first run)"
 cat > inventory.yml <<INV
 all:
