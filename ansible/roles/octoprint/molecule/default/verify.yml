@@ -67,3 +67,47 @@
       until: octoprint_verify_http_again.status in [200, 302]
       retries: 60
       delay: 5
+
+    - name: Check the OctoEverywhere plugin is installed in the data dir
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.command: podman exec octoprint pip show --files OctoEverywhere
+      register: octoprint_verify_oe
+      changed_when: false
+      failed_when: >-
+        octoprint_verify_oe.rc != 0
+        or 'Location: /octoprint/plugins/' not in octoprint_verify_oe.stdout
+
+    - name: Check OctoPrint loaded the plugin
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.command: podman exec octoprint grep -c 'OctoEverywhere (' /octoprint/octoprint/logs/octoprint.log
+      register: octoprint_verify_oe_loaded
+      changed_when: false
+      until: octoprint_verify_oe_loaded.rc == 0
+      retries: 24
+      delay: 5
+
+    - name: Read the webcam snapshot URL OctoPrint (and Gadget) will use
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.command: >-
+        podman exec octoprint octoprint --basedir /octoprint/octoprint
+        config get --raw plugins.classicwebcam.snapshot
+      register: octoprint_verify_snapshot
+      changed_when: false
+      failed_when: octoprint_verify_snapshot.stdout != 'http://localhost:8080/?action=snapshot'
+
+    - name: Check the udev rule sets the C920's focus by its serial
+      ansible.builtin.command: >-
+        grep -c 'ENV{ID_SERIAL}=="046d_HD_Pro_Webcam_C920_MOLECULE", ATTR{index}=="0",
+        RUN+="/usr/bin/v4l2-ctl -d $devnode --set-ctrl=focus_automatic_continuous=0"'
+        /etc/udev/rules.d/70-octoprint.rules
+      changed_when: false
+
+    - name: Check udev accepts the rules file
+      ansible.builtin.command: udevadm verify /etc/udev/rules.d/70-octoprint.rules
+      changed_when: false

@@ -4,3 +4,4 @@ ansible/.collections/
 *.img
 *.img.xz
 backups/
+.ansible/

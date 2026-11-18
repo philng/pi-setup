@@ -5,3 +5,10 @@ base_firewall_allow:
   - port: "{{ octoprint_port | default(80) }}"
     proto: tcp
     src: lan
+
+# OctoPrint plugins installed by the octoprint role (see its defaults).
+# OctoEverywhere: remote access, notifications and Gadget AI failure
+# detection. Link it to your account once by hand: docs/octoprint.md.
+octoprint_plugins:
+  - name: OctoEverywhere
+    url: https://github.com/QuinnDamerell/OctoPrint-OctoEverywhere/archive/master.zip

@@ -1,4 +1,23 @@
 ---
+# The udev rule for webcam controls matches the camera by the serial number
+# in its /dev/v4l/by-id/ name, so that is the only kind of path it supports.
+- name: Check the webcam path works with webcam controls
+  ansible.builtin.assert:
+    that: octoprint_webcam_device | basename is match('^usb-.+-video-index[0-9]+$')
+    fail_msg: >-
+      octoprint_webcam_controls needs octoprint_webcam_device set to a path
+      from ls /dev/v4l/by-id/, like
+      /dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_XXXX-video-index0
+    quiet: true
+  when: octoprint_webcam_controls | length > 0
+
+- name: Install v4l2-ctl for webcam controls
+  ansible.builtin.apt:
+    name: v4l-utils
+    state: present
+    cache_valid_time: 3600
+  when: octoprint_webcam_controls | length > 0
+
 - name: Let rootless containers bind the web UI port
   ansible.posix.sysctl:
     name: net.ipv4.ip_unprivileged_port_start
@@ -91,7 +110,9 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Reload udev rules
+  notify:
+    - Reload udev rules
+    - Apply webcam controls
 
 - name: Apply group, unit and udev changes before starting
   ansible.builtin.meta: flush_handlers
@@ -104,3 +125,70 @@
     name: octoprint.service
     scope: user
     state: started
+
+# Everything below talks to the running container. Wait until OctoPrint has
+# started and written its config, so it doesn't overwrite what we set.
+- name: Wait for OctoPrint to finish starting
+  ansible.builtin.uri:
+    url: http://localhost:{{ octoprint_port }}/
+    status_code: [200, 302]
+  register: octoprint_up
+  until: octoprint_up.status in [200, 302]
+  retries: 60
+  delay: 5
+  check_mode: false
+  when: octoprint_plugins | length > 0 or octoprint_webcam_device | length > 0
+
+# The image sets PIP_USER and PYTHONUSERBASE=/octoprint/plugins, so pip in
+# the container installs into the data dir, like OctoPrint's Plugin Manager.
+- name: Check which OctoPrint plugins are installed
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_exec }} pip show --quiet {{ item.name }}"
+  loop: "{{ octoprint_plugins }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: octoprint_plugin_check
+  changed_when: false
+  failed_when: octoprint_plugin_check.rc not in [0, 1]
+  check_mode: false
+
+- name: Install missing OctoPrint plugins
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_exec }} pip install --no-cache-dir {{ item.item.url | quote }}"
+  loop: "{{ octoprint_plugin_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.rc != 0
+  changed_when: true
+  notify: Restart octoprint
+
+- name: Read OctoPrint's webcam settings
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_cli }} config get --raw {{ item.key }}"
+  loop: "{{ octoprint_webcam_settings | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: octoprint_webcam_current
+  changed_when: false
+  check_mode: false
+  when: octoprint_webcam_device | length > 0
+
+- name: Point OctoPrint at the webcam stream and snapshot
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_cli }} config set {{ item.item.key }} {{ item.item.value | quote }}"
+  loop: "{{ octoprint_webcam_current.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when:
+    - item.stdout is defined
+    - item.stdout != item.item.value
+  changed_when: true
+  notify: Restart octoprint
