@@ -56,11 +56,12 @@ Re-run `make apply` to pull dotfile changes.
 - **SD card now, USB SSD later.** Moving to the SSD is "flash the SSD, re-run Ansible",
   not cloning.
 
-## Roadmap
+## Guides
 
-1. Repo skeleton and base image (this step)
-2. Base role (firewall, SSH, updates, logs, boot order) and usbip server role, with Molecule + QEMU tests
-3. Fedora Sway Atomic client that auto-attaches the dongles
-4. Health check and SSD migration guide
+1. [Base image](docs/01-base-image.md): flash and first boot
+2. [Base setup and USB/IP server](docs/02-usbip-server.md), incl. the hardware smoke test
+3. [Gaming PC setup](docs/03-client.md): auto-attach on Linux, USBAnywhere on Windows
+4. [Health check and moving to the SSD](docs/04-ssd.md)
+5. [OctoPrint on a second Pi](docs/octoprint.md)
 
-Side track: OctoPrint on its own Pi (`podman` + `octoprint` roles).
+Day to day: `make apply` after changing anything, `make health` to check on the Pis.

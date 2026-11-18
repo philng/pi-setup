@@ -1,0 +1,80 @@
+---
+# Read-only health report for every Pi:  make health   (or make health LIMIT=pilab)
+# Fails if something needs attention; changes nothing.
+- name: Health check
+  hosts: pis
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Collect system state
+      ansible.builtin.shell: |
+        set -uo pipefail
+        echo "root_dev=$(findmnt -no SOURCE /)"
+        echo "failed_units=$(systemctl list-units --state=failed --no-legend --plain | awk '{print $1}' | paste -sd, -)"
+        echo "reboot_required=$(test -e /run/reboot-required && echo yes || echo no)"
+        echo "firewall=$(nft list table inet pilab >/dev/null 2>&1 && echo loaded || echo MISSING)"
+        echo "temp_c=$(awk '{printf "%.1f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null)"
+        if command -v vcgencmd >/dev/null; then
+          echo "throttled=$(vcgencmd get_throttled | cut -d= -f2)"
+        fi
+        if command -v rpi-eeprom-config >/dev/null && grep -q 'Raspberry Pi 4' /proc/device-tree/model 2>/dev/null; then
+          echo "boot_order=$(rpi-eeprom-config | sed -n 's/^BOOT_ORDER=//p')"
+        fi
+        echo "last_upgrade=$(stat -c %y /var/lib/apt/periodic/unattended-upgrades-stamp 2>/dev/null | cut -d. -f1)"
+        if systemctl cat usbipd >/dev/null 2>&1; then
+          echo "usbipd=$(systemctl is-active usbipd)"
+          echo "exported=$(ls /sys/bus/usb/drivers/usbip-host 2>/dev/null | grep -E '^[0-9]+-' | paste -sd, -)"
+        fi
+      args:
+        executable: /bin/bash
+      register: health_raw
+      changed_when: false
+
+    - name: Parse
+      ansible.builtin.set_fact:
+        health: "{{ dict(health_raw.stdout_lines | map('split', '=', 1)) }}"
+
+    - name: Work out what needs attention
+      vars:
+        thr: "{{ health.throttled | default('0x0') | int(base=16) }}"
+        root: "{{ ansible_facts.mounts | selectattr('mount', 'equalto', '/') | first }}"
+      ansible.builtin.set_fact:
+        health_problems: >-
+          {{
+            ([('failed units: ' ~ health.failed_units)] if health.failed_units else [])
+            + (['firewall table inet pilab is not loaded'] if health.firewall != 'loaded' else [])
+            + (['usbipd is ' ~ health.usbipd] if health.usbipd is defined and health.usbipd != 'active' else [])
+            + (['under-voltage right now: use the official 3A supply or a powered SSD enclosure']
+               if (thr | int) % 2 == 1 else [])
+            + (['throttling right now (hot or under-volted)']
+               if ((thr | int) // 2) % 8 > 0 else [])
+          }}
+        health_warnings: >-
+          {{
+            (['under-voltage or throttling happened since boot (' ~ health.throttled ~ ')']
+              if (thr | int) >= 65536 else [])
+            + (['reboot needed to finish updates'] if health.reboot_required == 'yes' else [])
+            + (['root filesystem over 80% full']
+              if root.size_available < 0.2 * root.size_total else [])
+            + (['usbipd is running but no dongle is exported (plugged in?)']
+              if health.usbipd | default('') == 'active' and not health.exported else [])
+          }}
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Boots from: {{ 'SD card' if 'mmcblk' in health.root_dev else 'USB/SSD' }} ({{ health.root_dev }})"
+          - "Uptime: {{ (ansible_facts.uptime_seconds / 86400) | round(1) }} days"
+          - "Temperature: {{ health.temp_c | default('?') }} C"
+          - "Throttled flags: {{ health.throttled | default('n/a') }} (0x0 is perfect)"
+          - "Bootloader BOOT_ORDER: {{ health.boot_order | default('n/a') }}"
+          - "Last automatic upgrade: {{ health.last_upgrade | default('never', true) }}"
+          - "usbipd: {{ health.usbipd | default('n/a') }}, exported: {{ health.exported | default('none', true) }}"
+          - "Warnings: {{ health_warnings | join('; ') or 'none' }}"
+          - "Problems: {{ health_problems | join('; ') or 'none' }}"
+
+    - name: Fail if something needs attention
+      ansible.builtin.assert:
+        that: health_problems | length == 0
+        fail_msg: "{{ health_problems | join('; ') }}"
+        quiet: true
