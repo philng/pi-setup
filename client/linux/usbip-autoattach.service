@@ -1,0 +1,18 @@
+[Unit]
+Description=Attach USB devices exported by the Pi (USB/IP)
+Documentation=file:///usr/local/share/doc/pi-setup/03-client.md
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/usbip-autoattach.conf
+ExecStartPre=/usr/sbin/modprobe vhci-hcd
+ExecStart=/usr/local/bin/usbip-autoattach ${SERVER}
+# On stop, hand the dongles back to the Pi so another machine can use them.
+ExecStopPost=/usr/local/bin/usbip-autoattach --detach-all
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

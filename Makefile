@@ -24,7 +24,7 @@ octoprint-backup: ## Copy OctoPrint settings from the printer Pi to backups/octo
 lint: ## Lint YAML, Ansible and shell
 	yamllint .
 	cd $(ANSIBLE_DIR) && ansible-lint
-	shellcheck -x scripts/*.sh
+	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh
 
 molecule-image: ## Build the Debian/systemd image Molecule tests run in
 	docker build -t pi-setup-molecule:trixie molecule/
