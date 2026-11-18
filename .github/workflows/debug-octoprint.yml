@@ -1,0 +1,29 @@
+---
+# TEMPORARY: find out why stopping the OctoPrint container takes ~90s.
+name: debug-octoprint
+on:
+  pull_request:
+jobs:
+  stop-timing:
+    runs-on: ubuntu-24.04-arm
+    env:
+      ANSIBLE_CONFIG: ${{ github.workspace }}/ansible/ansible.cfg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible-core molecule "molecule-plugins[docker]" docker
+      - run: make deps && ansible-galaxy collection install community.docker
+      - run: make molecule-image
+      - run: cd ansible/roles/octoprint && molecule create && molecule prepare && molecule converge
+      - name: Inspect and time a restart
+        if: always()
+        run: |
+          x() { docker exec pi bash -c "$1"; }
+          x 'systemctl --user -M pods@ cat octoprint.service'
+          x 'systemctl --user -M pods@ show octoprint.service -p ExecStop -p ExecStopPost -p KillMode -p KillSignal -p TimeoutStopUSec -p NotifyAccess -p Type'
+          x 'cd /tmp && sudo -u pods XDG_RUNTIME_DIR=/run/user/$(id -u pods) podman inspect octoprint --format "{{.Config.StopSignal}} {{.Config.StopTimeout}} {{.Config.Entrypoint}} {{.Config.Cmd}}"'
+          x 'date +%T.%N; time systemctl --user -M pods@ restart octoprint.service; date +%T.%N'
+          x 'journalctl --no-pager -n 150 _UID=$(id -u pods)' || true
+          x 'journalctl --no-pager -n 80' || true
