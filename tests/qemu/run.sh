@@ -33,6 +33,10 @@ make_cmdline() {
   # fails to probe), so that has to be the console or init has no /dev/console.
   # The Pi's dwc_otg USB driver can oops in its FIQ handler under QEMU; turn
   # the FIQ paths off (only affects the emulated USB, not the real Pi).
+  # QEMU resets the machine the moment the BCM2835 watchdog is armed (Pi OS's
+  # initramfs opens it to disarm it), and that reset then hangs, so keep the
+  # watchdog driver out of the emulated kernel.
+  c="$c initcall_blacklist=bcm2835_wdt_driver_init"
   c="$c earlycon=pl011,0x3f201000 console=ttyAMA1,115200 loglevel=7 dwc_otg.fiq_enable=0 dwc_otg.fiq_fsm_enable=0 dwc_otg.nak_holdoff=0"
   printf '%s\n' "$c" > cmdline.boot
   echo "cmdline: $c"
@@ -58,9 +62,8 @@ prepare_firstboot() {
   rm -f pi.img
   xz -dkc "$xzfile" > pi.img
   qemu-img resize -f raw pi.img 8G >/dev/null   # SD size must be a power of two
-  # Pi OS grows the root partition on first boot and then reboots. A reboot
-  # hangs under QEMU's raspi3b (the secondary CPUs aren't reset), so grow it
-  # here instead and drop "resize" from the kernel command line.
+  # Grow the root partition here rather than on first boot, so the emulated
+  # first boot does less (and Pi OS doesn't change the disk ID under us).
   echo ', +' | sfdisk -q -N 2 pi.img
   endlog
 
@@ -96,15 +99,6 @@ NET
   cp boot/kernel8.img boot/bcm2710-rpi-3-b-plus.dtb .
   [[ -f boot/initramfs8 ]] && cp boot/initramfs8 .
   echo "cmdline.txt: $(cat boot/cmdline.txt)"
-  if [[ -f initramfs8 ]] && command -v lsinitramfs >/dev/null; then
-    echo "initramfs boot scripts:"; lsinitramfs initramfs8 | grep -E '^(usr/)?scripts/' | sort || true
-    # Pi OS's own first-boot hooks; printed so a reboot under QEMU can be traced.
-    rm -rf initrd.x && mkdir initrd.x && unmkinitramfs initramfs8 initrd.x 2>/dev/null || true
-    for f in init-top/rpi_wd local-premount/resize_early local-bottom/set_partuuid local-bottom/imager_fixup; do
-      find initrd.x -path "*scripts/$f" -exec sh -c 'echo "----- $1"; cat "$1"' _ {} \;
-    done
-    rm -rf initrd.x
-  fi
   make_cmdline boot/cmdline.txt
   sudo umount boot
   sudo e2fsck -fy "${loop}p2" >/dev/null || [[ $? -le 1 ]]
@@ -147,9 +141,9 @@ wait_for_ssh() {
       grep -h -B40 -A3 'Kernel panic' serial.log serial1.log | head -80
       exit 1
     fi
-    # A guest reboot hangs under raspi3b; don't wait out the timeout for it.
+    # A guest reset hangs under raspi3b; don't wait out the timeout for it.
     if (( $(grep -c 'Booting Linux' serial.log 2>/dev/null) > 1 )); then
-      echo "The guest rebooted, which hangs under QEMU's raspi3b. What it printed before the reboot:"
+      echo "The guest reset, which hangs under QEMU's raspi3b. What it printed before the reset:"
       awk '/Booting Linux/ && ++n == 2 {exit} {print}' serial.log | tail -n 100
       exit 1
     fi
@@ -165,7 +159,12 @@ wait_for_ssh() {
 
 wait_for_exit() {
   local pid; pid=$(cat qemu.pid)
-  for _ in $(seq 1 120); do kill -0 "$pid" 2>/dev/null || return 0; sleep 5; done
+  for _ in $(seq 1 120); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    # Without the watchdog driver the guest can't switch QEMU off; it halts.
+    if grep -qs 'reboot: Power down' serial.log; then sleep 2; kill "$pid" || true; sleep 2; return 0; fi
+    sleep 5
+  done
   echo "QEMU did not power off; killing it"; kill "$pid" || true; sleep 5
 }
 
