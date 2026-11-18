@@ -20,3 +20,9 @@ usbip_devices:
 # `usbip list -l` (e.g. "1-1.3"). Hubs themselves are never exported, and
 # nothing with a mass-storage interface (like the boot SSD) ever is.
 usbip_ports: []
+
+# Load the kernel module and (re)start usbipd. Off automatically inside
+# containers (Molecule), where kernel modules can't be loaded.
+usbip_manage_kernel: >-
+  {{ ansible_facts['virtualization_type'] | default('')
+     not in ['docker', 'podman', 'container', 'containerd'] }}

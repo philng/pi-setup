@@ -9,12 +9,14 @@
     udevadm control --reload-rules
     udevadm trigger --action=add --subsystem-match=usb --property-match=DEVTYPE=usb_device
   changed_when: true
+  when: usbip_manage_kernel | bool
   tags: [molecule-notest]
 
 - name: Restart usbipd
   ansible.builtin.systemd_service:
     name: usbipd
     state: restarted
+  when: usbip_manage_kernel | bool
   tags: [molecule-notest]
 
 - name: Reload nftables

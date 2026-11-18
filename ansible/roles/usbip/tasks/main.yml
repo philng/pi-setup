@@ -18,6 +18,7 @@
   community.general.modprobe:
     name: usbip_host
     state: present
+  when: usbip_manage_kernel | bool
   tags: [molecule-notest]
 
 - name: Install export safety check
@@ -70,4 +71,5 @@
   ansible.builtin.systemd_service:
     name: usbipd
     state: started
+  when: usbip_manage_kernel | bool
   tags: [molecule-notest]
