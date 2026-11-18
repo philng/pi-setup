@@ -31,18 +31,21 @@
       changed_when: false
       failed_when: dotfiles_verify_backup.stdout != '# old ' ~ item
 
+    # Under `script` so zsh gets a terminal like an SSH login does (zle and
+    # fzf's key bindings need one). Its output has stdout and stderr merged.
     - name: Start an interactive zsh as the user
       become: true
       become_user: admin
-      ansible.builtin.command: zsh -i -c 'whence -w history-substring-search-up; alias gs'
+      ansible.builtin.command: >-
+        script -qec "zsh -i -c 'whence -w history-substring-search-up; alias gs'" /dev/null
       environment:
         TERM: xterm-256color
       register: dotfiles_verify_zsh
       changed_when: false
       failed_when: >-
         dotfiles_verify_zsh.rc != 0
-        or dotfiles_verify_zsh.stderr | length > 0
         or 'history-substring-search-up: function' not in dotfiles_verify_zsh.stdout
+        or dotfiles_verify_zsh.stdout is search("(?i)error|not found|can't|no such")
 
     - name: Check vim loads its plugins without errors
       become: true
