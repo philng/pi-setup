@@ -31,7 +31,9 @@ make_cmdline() {
   c=$(sed -e 's/console=[^ ]*//g' -e 's/\bquiet\b//' "$1" | tr -s ' ')
   # On the emulated Pi 3B+ the PL011 UART enumerates as ttyAMA1 (the mini UART
   # fails to probe), so that has to be the console or init has no /dev/console.
-  c="$c earlycon=pl011,0x3f201000 console=ttyAMA1,115200 loglevel=7 dwc_otg.fiq_fsm_enable=0"
+  # The Pi's dwc_otg USB driver can oops in its FIQ handler under QEMU; turn
+  # the FIQ paths off (only affects the emulated USB, not the real Pi).
+  c="$c earlycon=pl011,0x3f201000 console=ttyAMA1,115200 loglevel=7 dwc_otg.fiq_enable=0 dwc_otg.fiq_fsm_enable=0 dwc_otg.nak_holdoff=0"
   printf '%s\n' "$c" > cmdline.boot
   echo "cmdline: $c"
 }
@@ -120,6 +122,12 @@ wait_for_ssh() {
       echo "Pi did not come up over SSH within ${BOOT_TIMEOUT}s. Serial log tails:"
       ls -l serial.log serial1.log
       tail -n 80 serial.log; echo ----; tail -n 80 serial1.log
+      exit 1
+    fi
+    # Fail fast on a kernel panic instead of waiting out the timeout.
+    if grep -qs 'Kernel panic' serial.log serial1.log; then
+      echo "Kernel panicked under QEMU:"
+      grep -h -B40 -A3 'Kernel panic' serial.log serial1.log | head -80
       exit 1
     fi
     # Fail fast if the kernel printed nothing at all after a few minutes.
