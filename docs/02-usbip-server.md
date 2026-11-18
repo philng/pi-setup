@@ -84,13 +84,11 @@ Every PR runs, in CI:
   nothing), then checked: live firewall rules, sshd settings, unit files accepted by
   `systemd-analyze`, udev rules accepted by `udevadm verify`, and the export safety
   check against a fake set of devices (hub, SSD, duplicate, missing).
-- **QEMU** (`tests/qemu/run.sh`): boots the real Raspberry Pi OS Lite image on an
-  emulated Pi, uses `configure-boot.sh` for first boot, applies `site.yml` twice,
-  then checks usbipd is listening, the module is loaded and the firewall is up.
-  It's slow (the whole Pi is emulated, 45+ minutes) and uses a lot of Actions
-  minutes, so it only runs when you start it by hand: Actions tab, **qemu**,
-  **Run workflow**. The first boot is cached and reused until the Pi OS image or
-  the first-boot files change.
+
+There's no emulated-Pi test. Emulating the Pi board took 45+ minutes a run, and
+GitHub's runners can't boot Pi OS as a fast virtual machine (no KVM, and the Pi
+kernel has no virtio drivers). First boot and the hardware bits (watchdog,
+bootloader, real USB) are checked by the smoke test below on the actual Pi.
 
 Run Molecule locally with `pip install molecule molecule-plugins[docker]` and
 `cd ansible/roles/usbip && molecule test` (needs Docker; on an x86 machine also
