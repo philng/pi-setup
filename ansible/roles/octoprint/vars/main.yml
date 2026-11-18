@@ -1,0 +1,12 @@
+---
+# OctoPrint settings the role keeps in place when a webcam is set, per the
+# octoprint-docker README. mjpg-streamer listens on 8080 inside the
+# container; haproxy serves the stream to browsers under /webcam/.
+octoprint_webcam_settings:
+  plugins.classicwebcam.stream: "{{ octoprint_webcam_stream_url }}"
+  plugins.classicwebcam.snapshot: "{{ octoprint_webcam_snapshot_url }}"
+  webcam.ffmpeg: /usr/bin/ffmpeg
+
+# Run inside the container as the rootless user.
+octoprint_exec: podman exec octoprint
+octoprint_cli: "{{ octoprint_exec }} octoprint --basedir /octoprint/octoprint"

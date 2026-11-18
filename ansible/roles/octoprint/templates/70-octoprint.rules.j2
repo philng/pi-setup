@@ -4,3 +4,11 @@ ACTION=="add", SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*|ttyUSB[0-9]*", TAG+="syst
 {% if octoprint_webcam_device %}
 ACTION=="add", SUBSYSTEM=="video4linux", TAG+="systemd", ENV{SYSTEMD_WANTS}+="octoprint-replug.service"
 {% endif %}
+{% if octoprint_webcam_controls %}
+{%   set cam = octoprint_webcam_device | basename | regex_search('^usb-(.+)-video-index([0-9]+)$', '\\1', '\\2') %}
+# Set the webcam's controls each time it appears. 60-persistent-v4l.rules has
+# already set ID_SERIAL, the middle of its /dev/v4l/by-id/ name.
+{%   for name, value in octoprint_webcam_controls.items() %}
+ACTION=="add", SUBSYSTEM=="video4linux", ENV{ID_BUS}=="usb", ENV{ID_SERIAL}=="{{ cam[0] }}", ATTR{index}=="{{ cam[1] }}", RUN+="/usr/bin/v4l2-ctl -d $devnode --set-ctrl={{ name }}={{ value }}"
+{%   endfor %}
+{% endif %}

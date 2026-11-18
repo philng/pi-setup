@@ -20,8 +20,33 @@ octoprint_printer_device: ""
 
 # USB webcam on the host, e.g. a path from ls /dev/v4l/by-id/ ending in
 # -video-index0. Empty: no webcam, mjpg-streamer stays off.
+# When set, the role also points OctoPrint's Classic Webcam at the stream and
+# snapshot URLs below, which plugins such as OctoEverywhere Gadget need.
 octoprint_webcam_device: ""
+# Options for mjpg-streamer's input_uvc.so. A Logitech C920 sends MJPEG, so
+# "-n -r 1280x720 -f 15" is a good choice for it on a Pi 4.
 octoprint_mjpg_streamer_input: "-n -r 640x480"
+octoprint_webcam_stream_url: /webcam/?action=stream
+octoprint_webcam_snapshot_url: http://localhost:8080/?action=snapshot
+
+# UVC controls to set on the webcam whenever it is plugged in (a udev rule
+# runs v4l2-ctl), in this order. List them with
+#   v4l2-ctl -d /dev/v4l/by-id/<camera> -l
+# For a C920, fixed focus keeps timelapses sharp:
+#   octoprint_webcam_controls:
+#     focus_automatic_continuous: 0
+#     focus_absolute: 0   # 0 = far; raise it until the bed is sharp
+# Needs octoprint_webcam_device set to a /dev/v4l/by-id/ path.
+octoprint_webcam_controls: {}
+
+# Plugins to make sure are installed, by pip name and install URL (the
+# "archive" URL on the plugin's page at plugins.octoprint.org). They go into
+# the data dir (/octoprint/plugins), so backups include them. The role only
+# installs missing ones: update them from OctoPrint's Software Update as usual.
+#   octoprint_plugins:
+#     - name: OctoEverywhere
+#       url: https://github.com/QuinnDamerell/OctoPrint-OctoEverywhere/archive/master.zip
+octoprint_plugins: []
 
 # Restore OctoPrint's data from this tarball (made by `make octoprint-backup`)
 # when the Pi has no OctoPrint config yet, i.e. after a rebuild.

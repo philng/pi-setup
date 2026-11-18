@@ -2,6 +2,16 @@
 - name: Converge
   hosts: all
   become: true
+  vars:
+    # A C920's by-id path. Nothing is plugged in, so Quadlet skips it, but
+    # the webcam settings, plugin install and udev rule are all exercised.
+    octoprint_webcam_device: /dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_MOLECULE-video-index0
+    octoprint_webcam_controls:
+      focus_automatic_continuous: 0
+      focus_absolute: 0
+    octoprint_plugins:
+      - name: OctoEverywhere
+        url: https://github.com/QuinnDamerell/OctoPrint-OctoEverywhere/archive/master.zip
   roles:
     - podman
     - octoprint
