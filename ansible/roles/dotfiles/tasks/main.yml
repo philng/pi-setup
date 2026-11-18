@@ -32,6 +32,14 @@
   loop_control:
     label: "{{ item.dest }}"
 
+- name: Create the vim-plug autoload directory
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.file:
+    path: "{{ dotfiles_home }}/.vim/autoload"
+    state: directory
+    mode: "0755"
+
 - name: Install vim-plug
   become: true
   become_user: "{{ dotfiles_user }}"
@@ -97,5 +105,5 @@
   become: true
   become_user: "{{ dotfiles_user }}"
   ansible.builtin.command:
-    cmd: vim -E -s -i NONE -u {{ dotfiles_home }}/.vimrc +PlugInstall +qall
+    cmd: vim -E -s -i NONE -u {{ dotfiles_home }}/.vimrc +'PlugInstall --sync' +qall
     creates: "{{ dotfiles_home }}/.vim/plugged"
