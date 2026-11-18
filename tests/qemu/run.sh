@@ -28,7 +28,7 @@ endlog() { echo "::endgroup::" 2>/dev/null || true; }
 # Kernel command line for QEMU, from the image's cmdline.txt.
 make_cmdline() {
   local c
-  c=$(sed -e 's/console=[^ ]*//g' -e 's/\bquiet\b//' "$1" | tr -s ' ')
+  c=$(sed -e 's/console=[^ ]*//g' -e 's/\bquiet\b//' -e 's/\bresize\b//' "$1" | tr -s ' ')
   # On the emulated Pi 3B+ the PL011 UART enumerates as ttyAMA1 (the mini UART
   # fails to probe), so that has to be the console or init has no /dev/console.
   # The Pi's dwc_otg USB driver can oops in its FIQ handler under QEMU; turn
@@ -58,6 +58,10 @@ prepare_firstboot() {
   rm -f pi.img
   xz -dkc "$xzfile" > pi.img
   qemu-img resize -f raw pi.img 8G >/dev/null   # SD size must be a power of two
+  # Pi OS grows the root partition on first boot and then reboots. A reboot
+  # hangs under QEMU's raspi3b (the secondary CPUs aren't reset), so grow it
+  # here instead and drop "resize" from the kernel command line.
+  echo ', +' | sfdisk -q -N 2 pi.img
   endlog
 
   log "SSH key for this run"
@@ -88,10 +92,13 @@ network:
         name: "usb*"
       dhcp4: true
 NET
+  sudo sed -i -E 's/ ?\bresize\b//' boot/cmdline.txt
   cp boot/kernel8.img boot/bcm2710-rpi-3-b-plus.dtb .
   [[ -f boot/initramfs8 ]] && cp boot/initramfs8 .
   make_cmdline boot/cmdline.txt
   sudo umount boot
+  sudo e2fsck -fy "${loop}p2" >/dev/null || [[ $? -le 1 ]]
+  sudo resize2fs "${loop}p2"
   sudo losetup -d "$loop"
   trap - EXIT
   endlog
@@ -128,6 +135,12 @@ wait_for_ssh() {
     if grep -qs 'Kernel panic' serial.log serial1.log; then
       echo "Kernel panicked under QEMU:"
       grep -h -B40 -A3 'Kernel panic' serial.log serial1.log | head -80
+      exit 1
+    fi
+    # A guest reboot hangs under raspi3b; don't wait out the timeout for it.
+    if (( $(cat serial.log serial1.log 2>/dev/null | grep -c 'Booting Linux') > 1 )); then
+      echo "The guest rebooted, which hangs under QEMU's raspi3b. Serial log tail:"
+      tail -n 60 serial.log
       exit 1
     fi
     # Fail fast if the kernel printed nothing at all after a few minutes.

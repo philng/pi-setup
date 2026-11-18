@@ -32,7 +32,7 @@ jobs:
       - name: Install QEMU and Ansible
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-arm qemu-utils xz-utils
+          sudo apt-get install -y -qq qemu-system-arm qemu-utils xz-utils fdisk
           pip install ansible-core
           make deps
       - name: Which Pi OS image is current
