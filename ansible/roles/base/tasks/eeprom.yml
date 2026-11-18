@@ -1,11 +1,13 @@
 ---
+# Absent in containers and on non-Pi hardware; then there's nothing to manage.
 - name: Read board model
   ansible.builtin.slurp:
     src: /proc/device-tree/model
   register: base_board_model
+  failed_when: false
 
 - name: Manage Raspberry Pi 4 bootloader
-  when: "'Raspberry Pi 4' in (base_board_model.content | b64decode)"
+  when: "'Raspberry Pi 4' in (base_board_model.content | default('') | b64decode)"
   block:
     - name: Install rpi-eeprom
       ansible.builtin.apt:
