@@ -19,9 +19,16 @@ jobs:
       roles: ${{ steps.find.outputs.roles }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # PRs test only the roles they touch (shared files still test them all).
+      # Pushes to main always test every role.
       - id: find
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          roles=$(ls -d ansible/roles/*/molecule/default 2>/dev/null | cut -d/ -f3 | jq -Rnc '[inputs]')
+          roles=$(.github/scripts/molecule-roles.sh $BASE)
+          echo "roles=$roles"
           echo "roles=$roles" >> "$GITHUB_OUTPUT"
 
   molecule:
@@ -34,6 +41,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+      # Build the test image while Python and collections install.
+      - name: Start building the Molecule test image
+        run: (make molecule-image > "$RUNNER_TEMP/image.log" 2>&1; echo $? > "$RUNNER_TEMP/image.rc") &
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -56,4 +66,10 @@ jobs:
         run: |
           make deps
           ansible-galaxy collection install community.docker
-      - run: make molecule ROLE=${{ matrix.role }}
+      - name: Wait for the test image
+        run: |
+          while [ ! -f "$RUNNER_TEMP/image.rc" ]; do sleep 1; done
+          cat "$RUNNER_TEMP/image.log"
+          exit "$(cat "$RUNNER_TEMP/image.rc")"
+      # The runner is thrown away, so skip Molecule's destroy steps (~15s).
+      - run: make molecule ROLE=${{ matrix.role }} MOLECULE_ARGS="--destroy=never"

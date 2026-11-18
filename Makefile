@@ -24,11 +24,11 @@ octoprint-backup: ## Copy OctoPrint settings from the printer Pi to backups/octo
 lint: ## Lint YAML, Ansible and shell
 	yamllint .
 	cd $(ANSIBLE_DIR) && ansible-lint
-	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh
+	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh .github/scripts/*.sh
 
 molecule-image: ## Build the Debian/systemd image Molecule tests run in
 	docker build -t pi-setup-molecule:trixie molecule/
 
 molecule: molecule-image ## Test one role in a container: make molecule ROLE=octoprint
 	@test -n "$(ROLE)" || { echo "usage: make molecule ROLE=<role>"; exit 1; }
-	cd $(ANSIBLE_DIR)/roles/$(ROLE) && molecule test
+	cd $(ANSIBLE_DIR)/roles/$(ROLE) && molecule test $(MOLECULE_ARGS)
