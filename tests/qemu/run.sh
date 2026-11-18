@@ -81,6 +81,7 @@ ls -l kernel8.img bcm2710-rpi-3-b-plus.dtb; file kernel8.img || true
 
 SSH=(ssh -i id_ci -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
      -o ConnectTimeout=10 -o BatchMode=yes admin@127.0.0.1)
+boot_start=$SECONDS
 deadline=$((SECONDS + BOOT_TIMEOUT))
 until "${SSH[@]}" 'cloud-init status --wait >/dev/null 2>&1; true' 2>/dev/null; do
   if (( SECONDS > deadline )); then
@@ -90,7 +91,7 @@ until "${SSH[@]}" 'cloud-init status --wait >/dev/null 2>&1; true' 2>/dev/null; 
     exit 1
   fi
   # Fail fast if the kernel printed nothing at all after a few minutes.
-  if (( SECONDS > EARLY_CHECK )) && [[ ! -s serial.log && ! -s serial1.log ]]; then
+  if (( SECONDS - boot_start > EARLY_CHECK )) && [[ ! -s serial.log && ! -s serial1.log ]]; then
     echo "No console output after ${EARLY_CHECK}s: kernel did not start under QEMU."
     file kernel8.img || true
     exit 1
