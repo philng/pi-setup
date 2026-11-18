@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: usbip
+  author: philng
+  description: USB/IP server that auto-exports chosen USB devices (expects the base role's firewall)
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

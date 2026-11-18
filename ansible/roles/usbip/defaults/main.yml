@@ -1,0 +1,28 @@
+---
+usbip_port: 3240
+
+# Devices to export automatically whenever they're plugged in.
+# vid is required, pid optional (omit to match every product from that vendor).
+# Find IDs with `lsusb` on the Pi (ID vvvv:pppp).
+usbip_devices:
+  - name: Valve Steam Controller wireless receiver
+    vid: "28de"
+    pid: "1142"
+  - name: 8BitDo receivers (all models, in their native/Switch/D-input modes)
+    vid: "2dc8"
+  # 8BitDo and Flydigi receivers in XInput mode pretend to be this Xbox 360 receiver.
+  - name: XInput-mode receivers (8BitDo, Flydigi Vader in X mode)
+    vid: "045e"
+    pid: "028e"
+
+# Alternatively export everything plugged into particular physical ports, for
+# example a small hub dedicated to dongles. Values are USB bus paths as shown by
+# `usbip list -l` (e.g. "1-1.3"). Hubs themselves are never exported, and
+# nothing with a mass-storage interface (like the boot SSD) ever is.
+usbip_ports: []
+
+# Load the kernel module and (re)start usbipd. Off automatically inside
+# containers (Molecule), where kernel modules can't be loaded.
+usbip_manage_kernel: >-
+  {{ ansible_facts['virtualization_type'] | default('')
+     not in ['docker', 'podman', 'container', 'containerd'] }}

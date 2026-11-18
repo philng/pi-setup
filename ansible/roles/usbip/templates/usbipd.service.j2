@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=USB/IP server daemon
+After=network-online.target systemd-modules-load.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/sbin/modprobe usbip_host
+ExecStart=/usr/sbin/usbipd --tcp-port {{ usbip_port }}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

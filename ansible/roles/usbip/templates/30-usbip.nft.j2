@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+# USB/IP from the LAN only. Included inside chain inet pilab input (base role).
+ip saddr @lan4 tcp dport {{ usbip_port }} accept
+ip6 saddr @lan6 tcp dport {{ usbip_port }} accept

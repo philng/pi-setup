@@ -1,0 +1,11 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    base_volatile_logs: true
+    base_firewall_allow:
+      - {port: 8080, proto: tcp, src: lan}
+      - {port: 9999, proto: udp, src: any}
+  roles:
+    - base

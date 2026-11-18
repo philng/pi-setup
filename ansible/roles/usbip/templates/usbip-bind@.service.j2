@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Started by udev (90-usbip-export.rules) with the USB bus id as instance, e.g. usbip-bind@1-1.3.service
+[Unit]
+Description=Export USB device %i over USB/IP
+After=usbipd.service
+Wants=usbipd.service
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/local/libexec/usbip-bind-check %i
+ExecStart=/usr/sbin/usbip bind --busid=%i

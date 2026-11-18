@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Export these USB devices over USB/IP as soon as they appear.
+{% for d in usbip_devices %}
+# {{ d.name }}
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="{{ d.vid }}"{% if d.pid is defined %}, ATTR{idProduct}=="{{ d.pid }}"{% endif %}, TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbip-bind@%k.service"
+{% endfor %}
+{% for p in usbip_ports %}
+# Everything plugged into port {{ p }} (hubs are skipped by usbip-bind-check)
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", KERNEL=="{{ p }}", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbip-bind@%k.service"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", KERNEL=="{{ p }}.*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="usbip-bind@%k.service"
+{% endfor %}

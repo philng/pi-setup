@@ -1,0 +1,27 @@
+---
+- name: Configure fail2ban for SSH
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/10-pilab.local
+    content: |
+      # Managed by Ansible (base role)
+      [DEFAULT]
+      backend = systemd
+      banaction = nftables-multiport
+      banaction_allports = nftables-allports
+      maxretry = {{ base_fail2ban_maxretry }}
+      findtime = {{ base_fail2ban_findtime }}
+      bantime = {{ base_fail2ban_bantime }}
+      ignoreip = {{ base_fail2ban_ignoreip | join(' ') }}
+
+      [sshd]
+      enabled = true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Enable fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    enabled: true
+    state: started

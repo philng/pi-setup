@@ -1,0 +1,75 @@
+---
+- name: Install USB/IP tools
+  ansible.builtin.apt:
+    name: [usbip, hwdata, usbutils]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Load usbip_host at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/usbip.conf
+    content: "usbip_host\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load usbip_host now
+  community.general.modprobe:
+    name: usbip_host
+    state: present
+  when: usbip_manage_kernel | bool
+  tags: [molecule-notest]
+
+- name: Install export safety check
+  ansible.builtin.copy:
+    src: usbip-bind-check
+    dest: /usr/local/libexec/usbip-bind-check
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - usbipd.service
+    - usbip-bind@.service
+  notify: [Reload systemd, Restart usbipd]
+
+- name: Install udev export rules
+  ansible.builtin.template:
+    src: 90-usbip-export.rules.j2
+    dest: /etc/udev/rules.d/90-usbip-export.rules
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload udev and export plugged-in devices
+
+- name: Open USB/IP port to the LAN
+  ansible.builtin.template:
+    src: 30-usbip.nft.j2
+    dest: /etc/nftables.d/30-usbip.nft
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nftables
+
+- name: Flush handlers so units exist before enabling
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable usbipd (start needs the kernel module, so not in containers)
+  ansible.builtin.systemd_service:
+    name: usbipd
+    enabled: true
+
+- name: Start usbipd
+  ansible.builtin.systemd_service:
+    name: usbipd
+    state: started
+  when: usbip_manage_kernel | bool
+  tags: [molecule-notest]

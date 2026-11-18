@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# From base_firewall_allow. Included inside chain inet pilab input.
+{% for r in base_firewall_allow %}
+{% if r.src | default('lan') == 'any' %}
+{{ r.proto | default('tcp') }} dport {{ r.port }} accept
+{% else %}
+ip saddr @lan4 {{ r.proto | default('tcp') }} dport {{ r.port }} accept
+ip6 saddr @lan6 {{ r.proto | default('tcp') }} dport {{ r.port }} accept
+{% endif %}
+{% endfor %}

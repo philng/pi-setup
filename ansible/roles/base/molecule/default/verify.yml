@@ -1,0 +1,93 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read live firewall table
+      ansible.builtin.command: nft list table inet pilab
+      register: base_verify_nft
+      changed_when: false
+
+    - name: Firewall is default-deny with SSH from LAN and the extra ports
+      ansible.builtin.assert:
+        that:
+          - "'policy drop' in base_verify_nft.stdout"
+          - "'tcp dport 22 accept' in base_verify_nft.stdout"
+          - "'ip saddr @lan4 tcp dport 8080 accept' in base_verify_nft.stdout"
+          - "'udp dport 9999 accept' in base_verify_nft.stdout"
+
+    - name: Ruleset on disk passes nft's own check
+      ansible.builtin.command: nft -c -f /etc/nftables.conf
+      changed_when: false
+
+    - name: Read nftables unit state
+      ansible.builtin.systemd_service:
+        name: nftables
+      register: base_verify_unit
+
+    - name: Nftables enabled and active (oneshot, so "active (exited)")
+      ansible.builtin.assert:
+        that:
+          - base_verify_unit.status.ActiveState == 'active'
+          - base_verify_unit.status.UnitFileState == 'enabled'
+
+    - name: Read sshd effective config
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: base_verify_sshd
+      changed_when: false
+
+    - name: Password and root login are off
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in base_verify_sshd.stdout"
+          - "'permitrootlogin no' in base_verify_sshd.stdout"
+
+    - name: Read journald and unattended-upgrades config
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/systemd/journald.conf.d/10-pilab.conf
+        - /etc/apt/apt.conf.d/52pilab-unattended-upgrades
+        - /etc/apt/apt.conf.d/20auto-upgrades
+      register: base_verify_files
+
+    - name: Logs in RAM, unattended upgrades on incl. Raspberry Pi archive
+      ansible.builtin.assert:
+        that:
+          - "'Storage=volatile' in (base_verify_files.results[0].content | b64decode)"
+          - "'Raspberry Pi Foundation' in (base_verify_files.results[1].content | b64decode)"
+          - "'Unattended-Upgrade \"1\"' in (base_verify_files.results[2].content | b64decode)"
+
+    - name: Unattended-upgrades accepts the config
+      ansible.builtin.command: unattended-upgrade --dry-run
+      changed_when: false
+
+    - name: Fail2ban is protecting SSH
+      ansible.builtin.command: fail2ban-client status sshd
+      register: base_verify_f2b
+      changed_when: false
+      failed_when: base_verify_f2b.rc != 0 or 'Currently banned' not in base_verify_f2b.stdout
+
+    - name: Fail2ban bans with nftables
+      ansible.builtin.command: fail2ban-client get sshd actions
+      register: base_verify_f2b_action
+      changed_when: false
+      failed_when: "'nftables' not in base_verify_f2b_action.stdout"
+
+    - name: Read chrony and watchdog state
+      ansible.builtin.systemd_service:
+        name: chrony
+      register: base_verify_chrony
+
+    - name: Chrony is the active time service
+      ansible.builtin.assert:
+        that:
+          - base_verify_chrony.status.ActiveState == 'active'
+          - base_verify_chrony.status.UnitFileState == 'enabled'
+
+    - name: Systemd picked up the hardware watchdog setting
+      ansible.builtin.command: systemctl show --property=RuntimeWatchdogUSec  # noqa: command-instead-of-module
+      register: base_verify_wd
+      changed_when: false
+      failed_when: base_verify_wd.stdout != 'RuntimeWatchdogUSec=15s'

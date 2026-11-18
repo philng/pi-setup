@@ -1,0 +1,46 @@
+---
+base_timezone: America/Los_Angeles
+
+base_packages:
+  - chrony
+  - curl
+  - fail2ban
+  - htop
+  - nftables
+  - python3-systemd  # fail2ban's journal backend
+  - unattended-upgrades
+  - usbutils
+
+# Networks treated as "LAN" by the firewall. Other roles' rules can use the
+# @lan4 / @lan6 sets defined from these.
+base_lan_cidrs_v4: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+base_lan_cidrs_v6: [fe80::/10, fc00::/7]
+
+# Extra inbound ports, for host/group vars. Each: {port, proto: tcp|udp, src: lan|any}
+# Roles can instead drop their own file into /etc/nftables.d/ (see usbip role).
+base_firewall_allow: []
+
+# Unattended upgrades (Debian security + Raspberry Pi archive, incl. kernel/firmware).
+base_auto_reboot: false
+base_auto_reboot_time: "04:30"
+
+# Keep logs in RAM when the root filesystem is on an SD card, to save wear.
+# "auto" = only when / is on mmcblk; true/false to force.
+base_volatile_logs: auto
+base_journal_max_use: 64M
+
+# Raspberry Pi 4 bootloader: try SD first, then USB, then repeat. 0xf41.
+# With no SD card inserted, it boots from the USB SSD.
+base_manage_eeprom: true
+base_eeprom_boot_order: "0xf41"
+
+# fail2ban: ban an address after repeated failed SSH logins (nftables ban action,
+# reads the systemd journal).
+base_fail2ban_maxretry: 5
+base_fail2ban_findtime: 10m
+base_fail2ban_bantime: 1h
+base_fail2ban_ignoreip: [127.0.0.1/8, "::1"]
+
+# Hardware watchdog: if the Pi hangs for this long, the watchdog chip reboots it.
+# The Pi's watchdog maxes out around 15s.
+base_watchdog_sec: 15
