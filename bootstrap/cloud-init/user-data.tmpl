@@ -1,0 +1,25 @@
+#cloud-config
+# Rendered by scripts/configure-boot.sh. @VARS@ come from bootstrap/pi.env.
+hostname: @PI_HOSTNAME@
+manage_etc_hosts: true
+timezone: @PI_TIMEZONE@
+keyboard:
+  model: pc105
+  layout: "@PI_KEYBOARD@"
+
+# Raspberry Pi OS specific: turn on the SSH server.
+enable_ssh: true
+ssh_pwauth: false
+
+users:
+  - name: @PI_USER@
+    groups: users,adm,dialout,audio,netdev,video,plugdev,input,gpio,render,sudo
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - @SSH_PUBKEY@
+
+# Ansible needs Python, which Pi OS Lite already ships. Everything else is
+# configured by Ansible, so keep first boot minimal.
+package_update: false
