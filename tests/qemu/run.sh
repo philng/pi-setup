@@ -61,7 +61,9 @@ cp boot/kernel8.img boot/bcm2710-rpi-3-b-plus.dtb .
 initrd_args=()
 if [[ -f boot/initramfs8 ]]; then cp boot/initramfs8 .; initrd_args=(-initrd initramfs8); fi
 cmdline=$(sed -e 's/console=[^ ]*//g' -e 's/\bquiet\b//' boot/cmdline.txt | tr -s ' ')
-cmdline="$cmdline earlycon=pl011,0x3f201000 console=ttyAMA0,115200 console=ttyS1,115200 loglevel=7 dwc_otg.fiq_fsm_enable=0"
+# On the emulated Pi 3B+ the PL011 UART enumerates as ttyAMA1 (the mini UART
+# fails to probe), so that has to be the console or init has no /dev/console.
+cmdline="$cmdline earlycon=pl011,0x3f201000 console=ttyAMA1,115200 loglevel=7 dwc_otg.fiq_fsm_enable=0"
 echo "cmdline: $cmdline"
 sudo umount boot
 sudo losetup -d "$loop"
