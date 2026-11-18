@@ -1,0 +1,9 @@
+# Wired Ethernet with DHCP. Give the Pi a DHCP reservation on your router so
+# its address never changes; it is also reachable as <hostname>.local (mDNS).
+network:
+  version: 2
+  renderer: NetworkManager
+  ethernets:
+    eth0:
+      dhcp4: true
+      optional: true

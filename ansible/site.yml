@@ -1,0 +1,15 @@
+---
+# Apply everything. Roles are added per step of the roadmap in README.md.
+- name: Raspberry Pi hosts
+  hosts: pis
+  become: true
+  pre_tasks:
+    - name: Check this is a 64-bit Raspberry Pi OS (Debian) host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['architecture'] == 'aarch64'
+          - ansible_facts['os_family'] == 'Debian'
+        fail_msg: >-
+          Expected Raspberry Pi OS Lite 64-bit, got
+          {{ ansible_facts['distribution'] }} {{ ansible_facts['architecture'] }}.
+  roles: []

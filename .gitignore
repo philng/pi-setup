@@ -1,0 +1,5 @@
+.cache/
+ansible/.collections/
+*.retry
+*.img
+*.img.xz
