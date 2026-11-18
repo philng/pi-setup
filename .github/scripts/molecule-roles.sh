@@ -12,7 +12,8 @@ cd "$(dirname "$0")/../.."
 
 all=$(find ansible/roles -mindepth 3 -maxdepth 3 -path "*/molecule/default" | cut -d/ -f3 | sort)
 
-if [ $# -eq 0 ]; then
+# No base, or one git can't find (e.g. after a force-push): test everything.
+if [ $# -eq 0 ] || ! git cat-file -e "$1^{commit}" 2>/dev/null; then
   selected=$all
 else
   changed=$(git diff --name-only "$1"...HEAD)

@@ -2,10 +2,15 @@
 # Run every role's Molecule scenario in an arm64 Debian trixie container with
 # systemd: install, converge, a second run that must change nothing, verify.
 name: molecule
+# PRs only: the merge to main was already tested on its PR. Run it by hand
+# (Actions > molecule > Run workflow) to test every role.
 on:
-  push:
-    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - docs/**
+      - "**.md"
+  workflow_dispatch:
 
 # A new push to a PR cancels the run for the push before it.
 concurrency:
@@ -14,6 +19,7 @@ concurrency:
 
 jobs:
   discover:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     outputs:
       roles: ${{ steps.find.outputs.roles }}
@@ -22,12 +28,12 @@ jobs:
         with:
           fetch-depth: 0
       # PRs test only the roles they touch (shared files still test them all).
-      # Pushes to main always test every role.
+      # A manual run tests every role.
       - id: find
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          roles=$(.github/scripts/molecule-roles.sh $BASE)
+          roles=$(.github/scripts/molecule-roles.sh ${BASE:+"$BASE"})
           echo "roles=$roles"
           echo "roles=$roles" >> "$GITHUB_OUTPUT"
 
@@ -39,6 +45,7 @@ jobs:
       matrix:
         role: ${{ fromJSON(needs.discover.outputs.roles) }}
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # Build the test image while Python and collections install.
