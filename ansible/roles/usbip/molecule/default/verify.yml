@@ -4,10 +4,15 @@
   become: true
   gather_facts: false
   tasks:
-    - name: USB/IP tools installed
-      ansible.builtin.command: "{{ item }} --help"
+    - name: Find USB/IP tools
+      ansible.builtin.stat:
+        path: "{{ item }}"
       loop: [/usr/sbin/usbip, /usr/sbin/usbipd]
-      changed_when: false
+      register: usbip_verify_bins
+
+    - name: USB/IP tools installed and executable
+      ansible.builtin.assert:
+        that: usbip_verify_bins.results | map(attribute='stat.executable') | select | list | length == 2
 
     - name: Systemd accepts the units
       ansible.builtin.command: >-
