@@ -25,7 +25,6 @@
     repo: "{{ item.repo }}"
     dest: "{{ dotfiles_home }}/{{ item.dest }}"
     version: "{{ item.version }}"
-    depth: 1
   loop:
     - {repo: "{{ dotfiles_repo }}", dest: "{{ dotfiles_dest }}", version: "{{ dotfiles_version }}"}
     - {repo: "{{ dotfiles_antidote_repo }}", dest: .antidote, version: "{{ dotfiles_antidote_version }}"}
