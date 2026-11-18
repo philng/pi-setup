@@ -4,8 +4,8 @@ dotfiles_user: admin
 # Public repo, cloned on the Pi over HTTPS. Its files under home/ are linked
 # into the user's home, like the repo's own install.sh does.
 dotfiles_repo: https://github.com/philng/dotfiles.git
-# Branch, tag or commit. A branch is pulled again on every run.
-dotfiles_version: main
+# Branch, tag or commit; HEAD is the default branch. A branch is pulled again on every run.
+dotfiles_version: HEAD
 dotfiles_dest: .dotfiles  # relative to the user's home
 
 # Tools the dotfiles use when present (fzf keys, eza aliases, tmux config).
