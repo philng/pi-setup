@@ -209,3 +209,8 @@ log "Check the result on the real OS"
   sudo sshd -T | grep -q "passwordauthentication no"
   echo ALL CHECKS PASSED'
 endlog
+
+log "Health report (informational: emulated hardware has no throttling sensor etc.)"
+cd "$REPO_ROOT/ansible"
+ansible-playbook -i "$WORK/inventory.yml" --limit pilab health.yml || echo "health.yml reported problems (expected on emulated hardware)"
+endlog

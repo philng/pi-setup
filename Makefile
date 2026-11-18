@@ -1,7 +1,7 @@
 ANSIBLE_DIR := ansible
 export ANSIBLE_CONFIG := $(CURDIR)/$(ANSIBLE_DIR)/ansible.cfg
 
-.PHONY: deps ping apply check lint octoprint-backup molecule-image molecule
+.PHONY: deps ping apply check health lint octoprint-backup molecule-image molecule
 
 # Limit a run to one Pi or group, e.g. make apply LIMIT=octopi
 LIMIT_ARG := $(if $(LIMIT),--limit $(LIMIT))
@@ -17,6 +17,9 @@ apply: ## Configure the Pis
 
 check: ## Dry run with diff
 	cd $(ANSIBLE_DIR) && ansible-playbook site.yml --check --diff $(LIMIT_ARG)
+
+health: ## Read-only health report (fails if something needs attention)
+	cd $(ANSIBLE_DIR) && ansible-playbook health.yml $(LIMIT_ARG)
 
 octoprint-backup: ## Copy OctoPrint settings from the printer Pi to backups/octoprint/
 	cd $(ANSIBLE_DIR) && ansible-playbook octoprint-backup.yml $(LIMIT_ARG)
