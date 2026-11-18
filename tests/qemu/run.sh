@@ -98,6 +98,12 @@ NET
   echo "cmdline.txt: $(cat boot/cmdline.txt)"
   if [[ -f initramfs8 ]] && command -v lsinitramfs >/dev/null; then
     echo "initramfs boot scripts:"; lsinitramfs initramfs8 | grep -E '^(usr/)?scripts/' | sort || true
+    # Pi OS's own first-boot hooks; printed so a reboot under QEMU can be traced.
+    rm -rf initrd.x && mkdir initrd.x && unmkinitramfs initramfs8 initrd.x 2>/dev/null || true
+    for f in init-top/rpi_wd local-premount/resize_early local-bottom/set_partuuid local-bottom/imager_fixup; do
+      find initrd.x -path "*scripts/$f" -exec sh -c 'echo "----- $1"; cat "$1"' _ {} \;
+    done
+    rm -rf initrd.x
   fi
   make_cmdline boot/cmdline.txt
   sudo umount boot
