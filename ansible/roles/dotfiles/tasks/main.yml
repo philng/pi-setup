@@ -1,0 +1,108 @@
+---
+- name: Install zsh, vim and the tools the dotfiles use
+  ansible.builtin.apt:
+    name: "{{ dotfiles_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Make zsh the login shell
+  ansible.builtin.user:
+    name: "{{ dotfiles_user }}"
+    shell: /usr/bin/zsh
+    create_home: false
+  register: dotfiles_account
+
+- name: Set paths
+  ansible.builtin.set_fact:
+    dotfiles_home: "{{ dotfiles_account.home }}"
+    dotfiles_src: "{{ dotfiles_account.home }}/{{ dotfiles_dest }}/home"
+
+- name: Clone the dotfiles and antidote
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ dotfiles_home }}/{{ item.dest }}"
+    version: "{{ item.version }}"
+  loop:
+    - {repo: "{{ dotfiles_repo }}", dest: "{{ dotfiles_dest }}", version: "{{ dotfiles_version }}"}
+    - {repo: "{{ dotfiles_antidote_repo }}", dest: .antidote, version: "{{ dotfiles_antidote_version }}"}
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Create the vim-plug autoload directory
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.file:
+    path: "{{ dotfiles_home }}/.vim/autoload"
+    state: directory
+    mode: "0755"
+
+- name: Install vim-plug
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.get_url:
+    url: "{{ dotfiles_vim_plug_url }}"
+    dest: "{{ dotfiles_home }}/.vim/autoload/plug.vim"
+    mode: "0644"
+
+- name: Find the files to link
+  ansible.builtin.find:
+    paths: "{{ dotfiles_src }}"
+    hidden: true
+    recurse: true
+    file_type: file
+  register: dotfiles_files
+
+- name: Check what is already in the home directory
+  ansible.builtin.stat:
+    path: "{{ dotfiles_home }}/{{ item.path | relpath(dotfiles_src) }}"
+  loop: "{{ dotfiles_files.files }}"
+  loop_control:
+    label: "{{ item.path | relpath(dotfiles_src) }}"
+  register: dotfiles_targets
+
+- name: Move existing files aside to <file>.pre-dotfiles
+  ansible.builtin.command:
+    cmd: mv -- "{{ item.stat.path }}" "{{ item.stat.path }}.pre-dotfiles"
+  loop: "{{ dotfiles_targets.results | selectattr('stat.exists') | rejectattr('stat.islnk') }}"
+  loop_control:
+    label: "{{ item.stat.path }}"
+  changed_when: true
+
+- name: Create parent directories
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.file:
+    path: "{{ dotfiles_home }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ dotfiles_files.files | map(attribute='path') | map('relpath', dotfiles_src) | map('dirname')
+            | select | unique | sort }}"
+
+- name: Link the dotfiles into the home directory
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.file:
+    src: "{{ item.path }}"
+    dest: "{{ dotfiles_home }}/{{ item.path | relpath(dotfiles_src) }}"
+    state: link
+    force: true
+  loop: "{{ dotfiles_files.files }}"
+  loop_control:
+    label: "{{ item.path | relpath(dotfiles_src) }}"
+
+- name: Fetch the zsh plugins now so the first login is quick
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.command:
+    cmd: zsh -c 'source ~/.antidote/antidote.zsh && antidote bundle <~/.zsh_plugins.txt >~/.zsh_plugins.zsh'
+    creates: "{{ dotfiles_home }}/.zsh_plugins.zsh"
+
+- name: Install the vim plugins
+  become: true
+  become_user: "{{ dotfiles_user }}"
+  ansible.builtin.command:
+    cmd: vim -E -s -i NONE -u {{ dotfiles_home }}/.vimrc +'PlugInstall --sync' +qall
+    creates: "{{ dotfiles_home }}/.vim/plugged"

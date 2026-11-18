@@ -35,8 +35,14 @@ hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
 
 | Host | Inventory group | Roles |
 | --- | --- | --- |
-| `pilab` | `usbip` | base, usbip |
-| `octopi` | `printers` | base, podman, octoprint |
+| `pilab` | `usbip` | base, usbip, dotfiles |
+| `octopi` | `printers` | base, podman, octoprint, dotfiles |
+
+Every Pi also gets the `dotfiles` role: zsh as the `admin` login shell, vim, and
+[philng/dotfiles](https://github.com/philng/dotfiles) cloned to `~/.dotfiles` with its
+`home/` files linked into `~` (existing files are kept as `<file>.pre-dotfiles`).
+Antidote and vim-plug are installed and the plugins fetched, so the first login is ready.
+Re-run `make apply` to pull dotfile changes.
 
 ## Design choices
 

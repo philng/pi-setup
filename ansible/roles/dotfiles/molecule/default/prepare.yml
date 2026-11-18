@@ -1,0 +1,20 @@
+---
+# Stand-in for the Pi's login user: bash shell and a stock ~/.zshrc and
+# ~/.vimrc that the role must move aside, not lose.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Create the login user
+      ansible.builtin.user:
+        name: admin
+        shell: /bin/bash
+
+    - name: Put existing dotfiles in the way
+      ansible.builtin.copy:
+        dest: /home/admin/{{ item }}
+        content: "# old {{ item }}\n"
+        owner: admin
+        group: admin
+        mode: "0644"
+      loop: [.zshrc, .vimrc]

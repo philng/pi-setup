@@ -1,0 +1,56 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    dotfiles_verify_home: /home/admin
+  tasks:
+    - name: Look up the login user
+      ansible.builtin.getent:
+        database: passwd
+        key: admin
+
+    - name: Check zsh is the login shell
+      ansible.builtin.assert:
+        that: ansible_facts.getent_passwd.admin[5] == '/usr/bin/zsh'
+
+    - name: Check the dotfiles are linked from the clone
+      ansible.builtin.stat:
+        path: "{{ dotfiles_verify_home }}/{{ item }}"
+      loop: [.zshrc, .vimrc, .zsh_plugins.txt, .tmux.conf, .config/git/ignore]
+      register: dotfiles_verify_links
+      failed_when: >-
+        not dotfiles_verify_links.stat.islnk
+        or dotfiles_verify_links.stat.lnk_source != dotfiles_verify_home ~ '/.dotfiles/home/' ~ item
+        or dotfiles_verify_links.stat.pw_name != 'admin'
+
+    - name: Check the old files were kept
+      ansible.builtin.command: cat {{ dotfiles_verify_home }}/{{ item }}.pre-dotfiles
+      loop: [.zshrc, .vimrc]
+      register: dotfiles_verify_backup
+      changed_when: false
+      failed_when: dotfiles_verify_backup.stdout != '# old ' ~ item
+
+    # Under `script` so zsh gets a terminal like an SSH login does (zle and
+    # fzf's key bindings need one). Its output has stdout and stderr merged.
+    - name: Start an interactive zsh as the user
+      become: true
+      become_user: admin
+      ansible.builtin.command: >-
+        script -qec "zsh -i -c 'whence -w history-substring-search-up; alias gs'" /dev/null
+      environment:
+        TERM: xterm-256color
+      register: dotfiles_verify_zsh
+      changed_when: false
+      failed_when: >-
+        dotfiles_verify_zsh.rc != 0
+        or 'history-substring-search-up: function' not in dotfiles_verify_zsh.stdout
+        or dotfiles_verify_zsh.stdout is search("(?i)error|not found|can't|no such")
+
+    - name: Check vim loads its plugins without errors
+      become: true
+      become_user: admin
+      ansible.builtin.command: >-
+        vim -E -s -i NONE -u {{ dotfiles_verify_home }}/.vimrc
+        +'if !exists(":Commentary") | cquit | endif' +qall
+      changed_when: false
