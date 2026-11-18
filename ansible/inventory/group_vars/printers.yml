@@ -1,0 +1,7 @@
+---
+# OctoPrint's web UI (and webcam stream, proxied under /webcam/).
+# Read by the base role's firewall once it exists.
+base_firewall_allow:
+  - port: "{{ octoprint_port | default(80) }}"
+    proto: tcp
+    src: lan

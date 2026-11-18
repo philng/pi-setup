@@ -1,0 +1,54 @@
+---
+# Copy OctoPrint's settings, users and plugins from the Pi to
+# backups/octoprint/ in this repo folder (git-ignored). The octoprint role
+# restores latest.tar.gz automatically on a freshly rebuilt Pi.
+#   make octoprint-backup
+# Runs while OctoPrint keeps going, so it is safe during a print.
+- name: Back up OctoPrint
+  hosts: printers
+  become: true
+  vars:
+    octoprint_backup_dir: "{{ playbook_dir }}/../backups/octoprint"
+    octoprint_backup_name: "{{ inventory_hostname }}-{{ now(fmt='%Y%m%d-%H%M%S') }}.tar.gz"
+  tasks:
+    - name: Find the container user's home
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ podman_user | default('pods') }}"
+
+    - name: Work out the data directory
+      ansible.builtin.set_fact:
+        octoprint_src: >-
+          {{ octoprint_data_dir
+             | default(ansible_facts.getent_passwd[podman_user | default('pods')][4] ~ '/octoprint') }}
+
+    - name: Archive the data directory
+      community.general.archive:
+        path:
+          - "{{ octoprint_src }}/octoprint"
+          - "{{ octoprint_src }}/plugins"
+        dest: /tmp/octoprint-backup.tar.gz
+        format: gz
+        exclude_path: >-
+          {{ [] if (octoprint_backup_include_files | default(false) | bool) else
+             ['uploads', 'timelapse', 'logs'] | map('regex_replace', '^', octoprint_src ~ '/octoprint/') | list }}
+        mode: "0600"
+
+    - name: Download it
+      ansible.builtin.fetch:
+        src: /tmp/octoprint-backup.tar.gz
+        dest: "{{ octoprint_backup_dir }}/{{ octoprint_backup_name }}"
+        flat: true
+
+    - name: Mark it as the one to restore
+      ansible.builtin.copy:
+        src: "{{ octoprint_backup_dir }}/{{ octoprint_backup_name }}"
+        dest: "{{ octoprint_backup_dir }}/latest.tar.gz"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+
+    - name: Remove the copy on the Pi
+      ansible.builtin.file:
+        path: /tmp/octoprint-backup.tar.gz
+        state: absent

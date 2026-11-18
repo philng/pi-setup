@@ -1,0 +1,15 @@
+---
+# Restarting the user manager is how it picks up new group memberships
+# (e.g. dialout). It also restarts that user's containers.
+- name: Restart podman user manager
+  ansible.builtin.systemd_service:
+    name: user@{{ podman_user_uid }}.service
+    state: restarted
+
+- name: Podman user daemon-reload
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    scope: user

@@ -1,6 +1,7 @@
 # Add first-boot settings to a freshly flashed Raspberry Pi OS boot partition (Windows).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\configure-boot.ps1 E:\
+#   powershell -ExecutionPolicy Bypass -File scripts\configure-boot.ps1 -Hostname octopi E:\
 #
 # Flash the card/SSD with Raspberry Pi Imager first (no customisation needed).
 # Windows then shows the small "bootfs" partition as a drive letter; pass it here.
@@ -8,7 +9,8 @@
 # Works in Windows PowerShell 5.1 and PowerShell 7.
 param(
     [Parameter(Mandatory = $true)][string]$Boot,
-    [string]$SshPubKeyFile
+    [string]$SshPubKeyFile,
+    [string]$Hostname
 )
 $ErrorActionPreference = 'Stop'
 
@@ -17,8 +19,17 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 # --- Read bootstrap/pi.env (simple KEY=VALUE lines) -------------------------
 $cfg = @{}
 foreach ($line in Get-Content (Join-Path $RepoRoot 'bootstrap/pi.env')) {
-    if ($line -match '^\s*([A-Z_]+)=(.*)$') { $cfg[$Matches[1]] = $Matches[2].Trim() }
+    if ($line -match '^\s*([A-Z_]+)=(.*)$') {
+        $key = $Matches[1]; $val = $Matches[2].Trim()
+        # Shell-style ${VAR:-default}: take the environment variable, else the default.
+        if ($val -match '^\$\{([A-Z_]+):-(.*)\}$') {
+            $envVal = [Environment]::GetEnvironmentVariable($Matches[1])
+            $val = if ($envVal) { $envVal } else { $Matches[2] }
+        }
+        $cfg[$key] = $val
+    }
 }
+if ($Hostname) { $cfg['PI_HOSTNAME'] = $Hostname }
 if (-not $SshPubKeyFile) {
     $SshPubKeyFile = if ($env:SSH_PUBKEY_FILE) { $env:SSH_PUBKEY_FILE } `
                      else { Join-Path $HOME '.ssh\id_ed25519.pub' }
