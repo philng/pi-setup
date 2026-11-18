@@ -32,8 +32,6 @@ jobs:
       matrix:
         role: ${{ fromJSON(needs.discover.outputs.roles) }}
     runs-on: ubuntu-24.04-arm
-    env:
-      ANSIBLE_CONFIG: ${{ github.workspace }}/ansible/ansible.cfg
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,16 +56,4 @@ jobs:
         run: |
           make deps
           ansible-galaxy collection install community.docker
-      # Same image as `make molecule-image`, with layers cached between runs.
-      - uses: docker/setup-buildx-action@v3
-      - name: Build the Molecule test image
-        uses: docker/build-push-action@v6
-        with:
-          context: molecule
-          tags: pi-setup-molecule:trixie
-          load: true
-          cache-from: type=gha,scope=molecule-image
-          cache-to: type=gha,scope=molecule-image,mode=max
-      - name: molecule test
-        working-directory: ansible/roles/${{ matrix.role }}
-        run: molecule test
+      - run: make molecule ROLE=${{ matrix.role }}
