@@ -1,9 +1,15 @@
 ---
 # Apply everything. Roles are added per step of the roadmap in README.md.
 # Configure one Pi only with: make apply LIMIT=octopi
+#
+# Every play waits up to 10 minutes for the apt lock: a freshly booted Pi runs
+# its daily apt/unattended-upgrades jobs straight away and holds the lock.
 - name: All Raspberry Pis
   hosts: pis
   become: true
+  module_defaults:
+    ansible.builtin.apt:
+      lock_timeout: 600
   pre_tasks:
     - name: Check this is a 64-bit Raspberry Pi OS (Debian) host
       ansible.builtin.assert:
@@ -19,12 +25,18 @@
 - name: USB-over-IP server
   hosts: usbip
   become: true
+  module_defaults:
+    ansible.builtin.apt:
+      lock_timeout: 600
   roles:
     - usbip
 
 - name: 3D printer server
   hosts: printers
   become: true
+  module_defaults:
+    ansible.builtin.apt:
+      lock_timeout: 600
   roles:
     - podman
     - octoprint
@@ -32,5 +44,8 @@
 - name: Shell and dotfiles for the login user
   hosts: pis
   become: true
+  module_defaults:
+    ansible.builtin.apt:
+      lock_timeout: 600
   roles:
     - dotfiles

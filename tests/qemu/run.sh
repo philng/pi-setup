@@ -28,11 +28,15 @@ endlog() { echo "::endgroup::" 2>/dev/null || true; }
 # Kernel command line for QEMU, from the image's cmdline.txt.
 make_cmdline() {
   local c
-  c=$(sed -e 's/console=[^ ]*//g' -e 's/\bquiet\b//' "$1" | tr -s ' ')
+  c=$(sed -e 's/console=[^ ]*//g' -e 's/\bquiet\b//' -e 's/\bresize\b//' "$1" | tr -s ' ')
   # On the emulated Pi 3B+ the PL011 UART enumerates as ttyAMA1 (the mini UART
   # fails to probe), so that has to be the console or init has no /dev/console.
   # The Pi's dwc_otg USB driver can oops in its FIQ handler under QEMU; turn
   # the FIQ paths off (only affects the emulated USB, not the real Pi).
+  # QEMU resets the machine the moment the BCM2835 watchdog is armed (Pi OS's
+  # initramfs opens it to disarm it), and that reset then hangs, so keep the
+  # watchdog driver out of the emulated kernel.
+  c="$c initcall_blacklist=bcm2835_wdt_driver_init"
   c="$c earlycon=pl011,0x3f201000 console=ttyAMA1,115200 loglevel=7 dwc_otg.fiq_enable=0 dwc_otg.fiq_fsm_enable=0 dwc_otg.nak_holdoff=0"
   printf '%s\n' "$c" > cmdline.boot
   echo "cmdline: $c"
@@ -58,6 +62,9 @@ prepare_firstboot() {
   rm -f pi.img
   xz -dkc "$xzfile" > pi.img
   qemu-img resize -f raw pi.img 8G >/dev/null   # SD size must be a power of two
+  # Grow the root partition here rather than on first boot, so the emulated
+  # first boot does less (and Pi OS doesn't change the disk ID under us).
+  echo ', +' | sfdisk -q -N 2 pi.img
   endlog
 
   log "SSH key for this run"
@@ -88,10 +95,14 @@ network:
         name: "usb*"
       dhcp4: true
 NET
+  sudo sed -i -E 's/ ?\bresize\b//' boot/cmdline.txt
   cp boot/kernel8.img boot/bcm2710-rpi-3-b-plus.dtb .
   [[ -f boot/initramfs8 ]] && cp boot/initramfs8 .
+  echo "cmdline.txt: $(cat boot/cmdline.txt)"
   make_cmdline boot/cmdline.txt
   sudo umount boot
+  sudo e2fsck -fy "${loop}p2" >/dev/null || [[ $? -le 1 ]]
+  sudo resize2fs "${loop}p2"
   sudo losetup -d "$loop"
   trap - EXIT
   endlog
@@ -130,6 +141,12 @@ wait_for_ssh() {
       grep -h -B40 -A3 'Kernel panic' serial.log serial1.log | head -80
       exit 1
     fi
+    # A guest reset hangs under raspi3b; don't wait out the timeout for it.
+    if (( $(grep -c 'Booting Linux' serial.log 2>/dev/null) > 1 )); then
+      echo "The guest reset, which hangs under QEMU's raspi3b. What it printed before the reset:"
+      awk '/Booting Linux/ && ++n == 2 {exit} {print}' serial.log | tail -n 100
+      exit 1
+    fi
     # Fail fast if the kernel printed nothing at all after a few minutes.
     if (( SECONDS - boot_start > EARLY_CHECK )) && [[ ! -s serial.log && ! -s serial1.log ]]; then
       echo "No console output after ${EARLY_CHECK}s: kernel did not start under QEMU."
@@ -142,7 +159,12 @@ wait_for_ssh() {
 
 wait_for_exit() {
   local pid; pid=$(cat qemu.pid)
-  for _ in $(seq 1 120); do kill -0 "$pid" 2>/dev/null || return 0; sleep 5; done
+  for _ in $(seq 1 120); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    # Without the watchdog driver the guest can't switch QEMU off; it halts.
+    if grep -qs 'reboot: Power down' serial.log; then sleep 2; kill "$pid" || true; sleep 2; return 0; fi
+    sleep 5
+  done
   echo "QEMU did not power off; killing it"; kill "$pid" || true; sleep 5
 }
 
@@ -174,6 +196,17 @@ else
 fi
 "${SSH[@]}" 'cat /proc/device-tree/model; echo; uname -a; hostname'
 
+log "Let the guest's own apt jobs finish"
+# A fresh boot starts apt-daily/unattended-upgrades, which is very slow under
+# emulation and holds the dpkg lock. Stop the timers and wait for any run.
+"${SSH[@]}" 'sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer
+  # [x] keeps the pattern from matching this shell; the upgrade-shutdown helper
+  # that is always running does not match either.
+  busy="bin/[u]nattended-upgrade( |\$)|apt[.]systemd[.]daily|^/usr/bin/[d]pkg "
+  for _ in $(seq 1 90); do pgrep -f "$busy" >/dev/null || break; sleep 10; done
+  pgrep -af "$busy" || echo "apt is idle"' || true
+endlog
+
 log "Apply site.yml (first run)"
 cat > inventory.yml <<INV
 all:
@@ -191,6 +224,8 @@ all:
 INV
 cd "$REPO_ROOT/ansible"
 export ANSIBLE_CONFIG=$REPO_ROOT/ansible/ansible.cfg
+# Everything is slow under emulation, sudo included (default wait is 10s).
+export ANSIBLE_TIMEOUT=120
 ansible-playbook -i "$WORK/inventory.yml" --limit pilab site.yml
 endlog
 
