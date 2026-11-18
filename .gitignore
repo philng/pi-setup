@@ -3,3 +3,4 @@ ansible/.collections/
 *.retry
 *.img
 *.img.xz
+backups/

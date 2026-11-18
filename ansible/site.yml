@@ -1,6 +1,7 @@
 ---
 # Apply everything. Roles are added per step of the roadmap in README.md.
-- name: Raspberry Pi hosts
+# Configure one Pi only with: make apply LIMIT=octopi
+- name: All Raspberry Pis
   hosts: pis
   become: true
   pre_tasks:
@@ -12,4 +13,16 @@
         fail_msg: >-
           Expected Raspberry Pi OS Lite 64-bit, got
           {{ ansible_facts['distribution'] }} {{ ansible_facts['architecture'] }}.
-  roles: []
+  roles: []  # base (step 2)
+
+- name: USB-over-IP server
+  hosts: usbip
+  become: true
+  roles: []  # usbip (step 2)
+
+- name: 3D printer server
+  hosts: printers
+  become: true
+  roles:
+    - podman
+    - octoprint

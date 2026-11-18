@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Hand newly plugged printers and webcams to the OctoPrint container.
+ACTION=="add", SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*|ttyUSB[0-9]*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="octoprint-replug.service"
+{% if octoprint_webcam_device %}
+ACTION=="add", SUBSYSTEM=="video4linux", TAG+="systemd", ENV{SYSTEMD_WANTS}+="octoprint-replug.service"
+{% endif %}

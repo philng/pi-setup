@@ -1,0 +1,31 @@
+---
+# Official image: https://github.com/OctoPrint/octoprint-docker
+# Pin a version (e.g. docker.io/octoprint/octoprint:1.11) to control upgrades.
+octoprint_image: docker.io/octoprint/octoprint:latest
+
+# Host port for the web UI. The container listens on 80 (haproxy in front of
+# OctoPrint and the webcam stream). Below 1024 the role lets rootless
+# containers bind it, so http://octopi.local works without a port.
+octoprint_port: 80
+
+# OctoPrint config, plugins, uploads and timelapses. Mounted at /octoprint.
+octoprint_data_dir: "{{ podman_user_home }}/octoprint"
+
+# Printer serial port on the host. Best: its stable path from
+#   ls /dev/serial/by-id/
+# set in inventory/host_vars/<host>.yml. It shows up inside the container
+# as /dev/ttyACM0, so OctoPrint's auto-detect finds it.
+# Empty: pass /dev/ttyACM0 and /dev/ttyUSB0 through as they are.
+octoprint_printer_device: ""
+
+# USB webcam on the host, e.g. a path from ls /dev/v4l/by-id/ ending in
+# -video-index0. Empty: no webcam, mjpg-streamer stays off.
+octoprint_webcam_device: ""
+octoprint_mjpg_streamer_input: "-n -r 640x480"
+
+# Restore OctoPrint's data from this tarball (made by `make octoprint-backup`)
+# when the Pi has no OctoPrint config yet, i.e. after a rebuild.
+octoprint_restore_from: "{{ playbook_dir }}/../backups/octoprint/latest.tar.gz"
+
+# Backups skip uploaded G-code, timelapses and logs unless this is true.
+octoprint_backup_include_files: false

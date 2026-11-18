@@ -1,0 +1,38 @@
+---
+# Run every role's Molecule scenario in an arm64 Debian trixie container with
+# systemd: install, converge, a second run that must change nothing, verify.
+name: molecule
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      roles: ${{ steps.find.outputs.roles }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        run: |
+          roles=$(ls -d ansible/roles/*/molecule/default 2>/dev/null | cut -d/ -f3 | jq -Rnc '[inputs]')
+          echo "roles=$roles" >> "$GITHUB_OUTPUT"
+
+  molecule:
+    needs: discover
+    if: needs.discover.outputs.roles != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        role: ${{ fromJSON(needs.discover.outputs.roles) }}
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible-core molecule "molecule-plugins[docker]" docker
+      - run: make deps
+      - run: ansible-galaxy collection install community.docker
+      - run: make molecule ROLE=${{ matrix.role }}

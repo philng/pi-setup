@@ -1,0 +1,106 @@
+---
+- name: Let rootless containers bind the web UI port
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_unprivileged_port_start
+    value: "{{ octoprint_port }}"
+    sysctl_file: /etc/sysctl.d/60-octoprint.conf
+    sysctl_set: true
+  when: octoprint_port | int < 1024
+
+# Rootless containers lose supplementary groups unless the unit uses
+# --group-add keep-groups, which then gives OctoPrint the user's dialout
+# (serial) and video (webcam) access.
+- name: Give the container user serial and webcam access
+  ansible.builtin.user:
+    name: "{{ podman_user }}"
+    groups: [dialout, video]
+    append: true
+  notify:
+    - Restart podman user manager
+    - Restart octoprint
+
+- name: Create the OctoPrint data directory
+  ansible.builtin.file:
+    path: "{{ octoprint_data_dir }}"
+    state: directory
+    owner: "{{ podman_user }}"
+    group: "{{ podman_user }}"
+    mode: "0750"
+
+- name: Check for an existing OctoPrint config
+  ansible.builtin.stat:
+    path: "{{ octoprint_data_dir }}/octoprint/config.yaml"
+  register: octoprint_config
+
+- name: Look for a backup to restore
+  ansible.builtin.stat:
+    path: "{{ octoprint_restore_from }}"
+  delegate_to: localhost
+  become: false
+  register: octoprint_backup
+  when: not octoprint_config.stat.exists
+
+# The container runs as root inside its user namespace, which maps to the
+# rootless user, so everything in the data dir belongs to that user.
+- name: Restore OctoPrint data from backup
+  ansible.builtin.unarchive:
+    src: "{{ octoprint_restore_from }}"
+    dest: "{{ octoprint_data_dir }}"
+    owner: "{{ podman_user }}"
+    group: "{{ podman_user }}"
+  when:
+    - not octoprint_config.stat.exists
+    - octoprint_backup.stat.exists | default(false)
+  notify: Restart octoprint
+
+- name: Pull the OctoPrint image
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  containers.podman.podman_image:
+    name: "{{ octoprint_image }}"
+
+- name: Install the OctoPrint Quadlet unit
+  ansible.builtin.template:
+    src: octoprint.container.j2
+    dest: "{{ podman_user_home }}/.config/containers/systemd/octoprint.container"
+    owner: "{{ podman_user }}"
+    group: "{{ podman_user }}"
+    mode: "0644"
+  notify:
+    - Podman user daemon-reload
+    - Restart octoprint
+
+# Quadlet only passes a device through if it exists when the unit is
+# generated, and a running container never sees devices plugged in later.
+# So when a printer or webcam appears (powered on, replugged), regenerate
+# the unit and restart OctoPrint if it is running.
+- name: Install the replug service
+  ansible.builtin.template:
+    src: octoprint-replug.service.j2
+    dest: /etc/systemd/system/octoprint-replug.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install the udev rule that triggers it
+  ansible.builtin.template:
+    src: 70-octoprint.rules.j2
+    dest: /etc/udev/rules.d/70-octoprint.rules
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload udev rules
+
+- name: Apply group, unit and udev changes before starting
+  ansible.builtin.meta: flush_handlers
+
+- name: Start OctoPrint
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.systemd_service:
+    name: octoprint.service
+    scope: user
+    state: started

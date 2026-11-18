@@ -1,0 +1,8 @@
+---
+# Rootless user that owns every Quadlet container on the host. Roles put their
+# units in ~{{ podman_user }}/.config/containers/systemd/ and notify
+# "podman user daemon-reload".
+podman_user: pods
+# Pull newer images daily for containers with AutoUpdate=registry, and roll
+# back automatically if the new one fails to start.
+podman_auto_update: true

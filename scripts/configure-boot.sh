@@ -3,6 +3,7 @@
 #
 #   scripts/configure-boot.sh /run/media/$USER/bootfs   # Linux
 #   scripts/configure-boot.sh /Volumes/bootfs           # macOS
+#   PI_HOSTNAME=octopi scripts/configure-boot.sh ...    # a different Pi
 #
 # (Windows: use configure-boot.ps1.) Works with macOS's bash 3.2.
 #

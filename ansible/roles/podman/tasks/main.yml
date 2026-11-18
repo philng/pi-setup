@@ -1,0 +1,75 @@
+---
+- name: Install Podman and rootless helpers
+  ansible.builtin.apt:
+    name:
+      - podman
+      - crun              # needed for --group-add keep-groups
+      - passt             # rootless networking (pasta)
+      - uidmap
+      - dbus-user-session # systemctl --user for the service user
+      - acl               # lets Ansible become the unprivileged user
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the rootless container user
+  ansible.builtin.user:
+    name: "{{ podman_user }}"
+    comment: Rootless Podman containers
+    shell: /usr/sbin/nologin
+    create_home: true
+  register: podman_user_account
+
+- name: Read subordinate UID/GID ranges
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop: [/etc/subuid, /etc/subgid]
+  register: podman_subids
+
+- name: Check the user has subordinate UID/GID ranges
+  ansible.builtin.assert:
+    that: (item.content | b64decode) is search('(?m)^' ~ podman_user ~ ':')
+    fail_msg: "{{ item.item }} has no range for {{ podman_user }}; add one with usermod --add-subuids/--add-subgids"
+    quiet: true
+  loop: "{{ podman_subids.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Keep the user's services running without a login (linger)
+  ansible.builtin.command: loginctl enable-linger {{ podman_user }}
+  args:
+    creates: /var/lib/systemd/linger/{{ podman_user }}
+
+- name: Remember the user's UID and runtime dir for other roles
+  ansible.builtin.set_fact:
+    podman_user_uid: "{{ podman_user_account.uid }}"
+    podman_user_home: "{{ podman_user_account.home }}"
+    podman_user_env:
+      XDG_RUNTIME_DIR: /run/user/{{ podman_user_account.uid }}
+
+- name: Start the user's systemd instance
+  ansible.builtin.systemd_service:
+    name: user@{{ podman_user_uid }}.service
+    state: started
+
+- name: Create the Quadlet unit directory
+  ansible.builtin.file:
+    path: "{{ podman_user_home }}/{{ item }}"
+    state: directory
+    owner: "{{ podman_user }}"
+    group: "{{ podman_user }}"
+    mode: "0755"
+  loop:
+    - .config
+    - .config/containers
+    - .config/containers/systemd
+
+- name: Enable automatic image updates
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.systemd_service:
+    name: podman-auto-update.timer
+    scope: user
+    enabled: "{{ podman_auto_update }}"
+    state: "{{ podman_auto_update | ternary('started', 'stopped') }}"
