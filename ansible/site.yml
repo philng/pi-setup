@@ -26,3 +26,9 @@
   roles:
     - podman
     - octoprint
+
+- name: Shell and dotfiles for the login user
+  hosts: pis
+  become: true
+  roles:
+    - dotfiles
