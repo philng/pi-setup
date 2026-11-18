@@ -9,5 +9,9 @@ RUN apt-get update \
  && apt-get clean && rm -rf /var/lib/apt/lists/* \
  # Units that make no sense in a container.
  && systemctl mask systemd-firstboot.service getty.target console-getty.service
+# Pull network-online.target in at boot, as cloud-init does on Pi OS. Without
+# it the target never becomes active here, and Quadlet's
+# podman-user-wait-network-online.service stalls every container start for 90s.
+RUN ln -s /lib/systemd/system/network-online.target /etc/systemd/system/multi-user.target.wants/network-online.target
 STOPSIGNAL SIGRTMIN+3
 CMD ["/lib/systemd/systemd"]
