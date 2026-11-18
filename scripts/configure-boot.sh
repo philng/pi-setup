@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Add first-boot settings to a freshly flashed Raspberry Pi OS boot partition.
 #
-#   scripts/configure-boot.sh /run/media/$USER/bootfs
+#   scripts/configure-boot.sh /run/media/$USER/bootfs   # Linux
+#   scripts/configure-boot.sh /Volumes/bootfs           # macOS
+#
+# (Windows: use configure-boot.ps1.) Works with macOS's bash 3.2.
 #
 # Flash the card/SSD with Raspberry Pi Imager first (no customisation needed),
 # then run this against the mounted "bootfs" partition. It only writes a few
@@ -42,6 +45,8 @@ sed -e "s|@PI_HOSTNAME@|$(esc "$PI_HOSTNAME")|g" \
 cp "$REPO_ROOT/bootstrap/cloud-init/network-config" "$BOOT/network-config"
 [[ -f $BOOT/meta-data ]] || printf 'instance-id: %s\n' "$PI_HOSTNAME" > "$BOOT/meta-data"
 grep -q '^#cloud-config' "$BOOT/user-data" || die "user-data render failed"
+# macOS leaves ._* metadata files on FAT drives; tidy them up if we can.
+if command -v dot_clean >/dev/null; then dot_clean -m "$BOOT" || true; fi
 sync
 
 echo "Wrote user-data and network-config to $BOOT"

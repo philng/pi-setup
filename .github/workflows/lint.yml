@@ -16,3 +16,43 @@ jobs:
       - run: pip install ansible-core ansible-lint yamllint shellcheck-py
       - run: make deps
       - run: make lint
+
+  # Run the boot-partition script on every OS you might flash from,
+  # against a fake bootfs folder, and check the result parses as YAML.
+  configure-boot:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make a fake bootfs and SSH key
+        shell: bash
+        run: |
+          mkdir -p fakeboot keys
+          touch fakeboot/config.txt fakeboot/cmdline.txt
+          echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest ci@example" > keys/id.pub
+      - name: Run configure-boot.sh
+        if: runner.os != 'Windows'
+        run: SSH_PUBKEY_FILE=keys/id.pub scripts/configure-boot.sh fakeboot
+      - name: Run configure-boot.ps1 (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: scripts\configure-boot.ps1 -Boot fakeboot -SshPubKeyFile keys\id.pub
+      - name: Check output
+        shell: bash
+        run: |
+          python3 -m pip install -q pyyaml
+          python3 - <<'PY'
+          import yaml
+          raw = open("fakeboot/user-data", "rb").read()
+          assert not raw.startswith(b"\xef\xbb\xbf"), "BOM in user-data"
+          assert b"\r\n" not in raw, "CRLF in user-data"
+          assert raw.startswith(b"#cloud-config"), "missing #cloud-config header"
+          d = yaml.safe_load(raw)
+          assert d["hostname"] == "pilab", d["hostname"]
+          assert d["users"][0]["ssh_authorized_keys"][0].endswith("ci@example")
+          assert yaml.safe_load(open("fakeboot/network-config"))["network"]["version"] == 2
+          print("ok")
+          PY

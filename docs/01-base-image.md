@@ -8,9 +8,15 @@ After that, Ansible does the rest.
 
 - Raspberry Pi 4 B, official 3 A USB-C power supply, Ethernet cable
 - SD card (16 GB+) now, USB 3 SSD later. The steps are the same for both.
-- Raspberry Pi Imager 2.x, and a Linux machine with this repo checked out (your Fedora box works), plus
-  `ansible-core` (`pip install --user ansible-core`, or use a toolbox on Fedora Atomic)
-- An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519` if needed)
+- [Raspberry Pi Imager](https://www.raspberrypi.com/software/) 2.x on whichever
+  computer you flash from: Linux (`flatpak install flathub org.raspberrypi.rpi-imager`),
+  macOS or Windows
+- This repo checked out on that computer
+- An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519`; this
+  works the same in a Windows terminal)
+- To run Ansible afterwards: Linux or macOS with `ansible-core` (`pipx install
+  ansible-core`, `brew install ansible`, or a toolbox on Fedora Atomic). Ansible
+  doesn't run natively on Windows, so use WSL there, or run it from another machine.
 
 ## 1. Review the settings
 
@@ -23,34 +29,51 @@ username or timezone. If you change the username, change `ansible_user` in
 Imager is the safest way to write the disk: it only lists removable drives,
 shows each one's name and size, and verifies what it wrote.
 
-1. Install it. On Fedora Atomic: `flatpak install flathub org.raspberrypi.rpi-imager`.
-2. Device **Raspberry Pi 4**, OS **Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)**,
+1. Device **Raspberry Pi 4**, OS **Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)**,
    storage: your SD card (or USB SSD later).
-3. When asked about customisation, choose **No / skip**. The repo provides those
+2. When asked about customisation, choose **No / skip**. The repo provides those
    settings instead, so every rebuild is identical.
-4. Write, and let it finish verifying.
+3. Write, and let it finish verifying.
 
 For a fully reproducible build, download the exact `.img.xz` once, keep it, and
 use **Use custom** in Imager to flash that file every time.
 
 ## 3. Add the first-boot settings
 
-Unplug and re-plug the card. Find its small FAT partition labelled `bootfs` with
+Unplug and re-plug the card so your computer sees its small FAT partition
+labelled `bootfs`, then run the script for your OS from the repo folder:
+
+**macOS** (mounts automatically at `/Volumes/bootfs`):
+
+```bash
+scripts/configure-boot.sh /Volumes/bootfs
+```
+
+**Windows** (shows up as a drive letter, for example `E:`; check in File Explorer):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\configure-boot.ps1 E:\
+```
+
+**Linux / Fedora Sway Atomic.** Find the partition with
 `lsblk -o NAME,LABEL,MOUNTPOINTS`. Sway doesn't auto-mount drives, so if it has no
 mount point, mount it as your user (no sudo): `udisksctl mount -b /dev/sdX1`. It
-usually lands at `/run/media/$USER/bootfs`. Then:
+usually lands at `/run/media/$USER/bootfs`:
 
 ```bash
 scripts/configure-boot.sh /run/media/$USER/bootfs
 ```
 
+Ignore any offer from Windows to "format" the other partition. That's the Linux
+root filesystem, which Windows can't read.
+
 This only writes `user-data`, `network-config` and `meta-data` into that folder.
 It checks the folder really is a Pi boot partition first, keeps Imager's original
-files as `*.orig`, and needs no sudo. Raspberry Pi OS (Trixie and later) reads these
+files as `*.orig`, and needs no sudo or admin rights. Raspberry Pi OS (Trixie and later) reads these
 files with cloud-init on first boot to set the hostname, create your user with your
 SSH key, disable password login and turn on SSH.
 
-Eject it with `udisksctl unmount -b /dev/sdX1` (or from your file manager).
+Eject the drive (Finder, File Explorer, or `udisksctl unmount -b /dev/sdX1` on Linux).
 
 ## 4. First boot
 
