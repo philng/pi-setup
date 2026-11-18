@@ -1,0 +1,42 @@
+---
+- name: Read board model
+  ansible.builtin.slurp:
+    src: /proc/device-tree/model
+  register: base_board_model
+
+- name: Manage Raspberry Pi 4 bootloader
+  when: "'Raspberry Pi 4' in (base_board_model.content | b64decode)"
+  block:
+    - name: Install rpi-eeprom
+      ansible.builtin.apt:
+        name: rpi-eeprom
+        state: present
+
+    - name: Read current bootloader config
+      ansible.builtin.command: rpi-eeprom-config
+      register: base_eeprom_current
+      changed_when: false
+
+    - name: Stage BOOT_ORDER change (applied on next reboot)
+      when: >-
+        base_eeprom_current.stdout is not search('(?m)^BOOT_ORDER=' ~ base_eeprom_boot_order ~ '\s*$')
+      block:
+        - name: Write new bootloader config
+          ansible.builtin.copy:
+            dest: /root/pilab-eeprom.conf
+            content: >-
+              {{ (base_eeprom_current.stdout_lines
+                  | reject('match', '^BOOT_ORDER=')
+                  | list + ['BOOT_ORDER=' ~ base_eeprom_boot_order])
+                 | join('\n') }}
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Apply bootloader config
+          ansible.builtin.command: rpi-eeprom-config --apply /root/pilab-eeprom.conf
+          changed_when: true
+
+        - name: Remind about reboot
+          ansible.builtin.debug:
+            msg: "Bootloader BOOT_ORDER set to {{ base_eeprom_boot_order }}. It takes effect after the next reboot."

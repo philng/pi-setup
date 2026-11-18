@@ -1,0 +1,16 @@
+---
+- name: Packages
+  ansible.builtin.import_tasks: packages.yml
+
+- name: Firewall
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: SSH hardening
+  ansible.builtin.import_tasks: ssh.yml
+
+- name: Logging
+  ansible.builtin.import_tasks: logging.yml
+
+- name: Bootloader EEPROM
+  ansible.builtin.import_tasks: eeprom.yml
+  when: base_manage_eeprom | bool

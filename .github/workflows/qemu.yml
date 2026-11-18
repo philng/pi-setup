@@ -1,0 +1,42 @@
+---
+# Boot the real Raspberry Pi OS Lite arm64 image in QEMU and apply site.yml to it.
+# Slow (emulated CPU), so it runs only when the Ansible or boot files change.
+name: qemu
+on:
+  pull_request:
+    paths: ["ansible/**", "bootstrap/**", "scripts/**", "tests/qemu/**", ".github/workflows/qemu.yml"]
+  push:
+    branches: [main]
+    paths: ["ansible/**", "bootstrap/**", "scripts/**", "tests/qemu/**", ".github/workflows/qemu.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: qemu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pi-os:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install QEMU and Ansible
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-arm qemu-utils xz-utils
+          pip install ansible-core
+          make deps
+      - name: Cache the Pi OS image
+        uses: actions/cache@v4
+        with:
+          path: .cache/qemu/*.img.xz
+          key: raspios-lite-arm64-${{ github.run_id }}
+          restore-keys: raspios-lite-arm64-
+      - name: Boot Pi OS and apply site.yml twice
+        run: tests/qemu/run.sh
+      - name: Serial console log
+        if: always()
+        run: tail -n 200 .cache/qemu/serial.log || true

@@ -1,0 +1,32 @@
+---
+- name: Decide whether logs live in RAM
+  ansible.builtin.set_fact:
+    base_logs_in_ram: >-
+      {{ (base_volatile_logs | string == 'auto' and base_root_device is search('mmcblk'))
+         or (base_volatile_logs | string != 'auto' and base_volatile_logs | bool) }}
+  vars:
+    base_root_device: >-
+      {{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/')
+         | map(attribute='device') | first | default('') }}
+
+- name: Create journald drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure journald storage
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/10-pilab.conf
+    content: |
+      # Managed by Ansible (base role). Logs in RAM: {{ base_logs_in_ram }}
+      [Journal]
+      Storage={{ 'volatile' if base_logs_in_ram | bool else 'persistent' }}
+      RuntimeMaxUse={{ base_journal_max_use }}
+      SystemMaxUse={{ base_journal_max_use }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald

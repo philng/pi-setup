@@ -13,12 +13,14 @@
         fail_msg: >-
           Expected Raspberry Pi OS Lite 64-bit, got
           {{ ansible_facts['distribution'] }} {{ ansible_facts['architecture'] }}.
-  roles: []  # base (step 2)
+  roles:
+    - base
 
 - name: USB-over-IP server
   hosts: usbip
   become: true
-  roles: []  # usbip (step 2)
+  roles:
+    - usbip
 
 - name: 3D printer server
   hosts: printers

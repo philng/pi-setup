@@ -1,0 +1,14 @@
+---
+- name: SSH key-only login, no root
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-pilab.conf
+    content: |
+      # Managed by Ansible (base role)
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd

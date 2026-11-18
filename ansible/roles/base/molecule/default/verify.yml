@@ -1,0 +1,62 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read live firewall table
+      ansible.builtin.command: nft list table inet pilab
+      register: base_verify_nft
+      changed_when: false
+
+    - name: Firewall is default-deny with SSH from LAN and the extra ports
+      ansible.builtin.assert:
+        that:
+          - "'policy drop' in base_verify_nft.stdout"
+          - "'tcp dport 22 accept' in base_verify_nft.stdout"
+          - "'ip saddr @lan4 tcp dport 8080 accept' in base_verify_nft.stdout"
+          - "'udp dport 9999 accept' in base_verify_nft.stdout"
+
+    - name: Ruleset on disk passes nft's own check
+      ansible.builtin.command: nft -c -f /etc/nftables.conf
+      changed_when: false
+
+    - name: Gather service state
+      ansible.builtin.service_facts:
+
+    - name: Nftables enabled and running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['nftables.service'].state == 'running'
+          - ansible_facts.services['nftables.service'].status == 'enabled'
+
+    - name: Read sshd effective config
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: base_verify_sshd
+      changed_when: false
+
+    - name: Password and root login are off
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in base_verify_sshd.stdout"
+          - "'permitrootlogin no' in base_verify_sshd.stdout"
+
+    - name: Read journald and unattended-upgrades config
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/systemd/journald.conf.d/10-pilab.conf
+        - /etc/apt/apt.conf.d/52pilab-unattended-upgrades
+        - /etc/apt/apt.conf.d/20auto-upgrades
+      register: base_verify_files
+
+    - name: Logs in RAM, unattended upgrades on incl. Raspberry Pi archive
+      ansible.builtin.assert:
+        that:
+          - "'Storage=volatile' in (base_verify_files.results[0].content | b64decode)"
+          - "'Raspberry Pi Foundation' in (base_verify_files.results[1].content | b64decode)"
+          - "'Unattended-Upgrade \"1\"' in (base_verify_files.results[2].content | b64decode)"
+
+    - name: Unattended-upgrades accepts the config
+      ansible.builtin.command: unattended-upgrade --dry-run
+      changed_when: false

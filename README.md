@@ -59,7 +59,7 @@ Re-run `make apply` to pull dotfile changes.
 ## Roadmap
 
 1. Repo skeleton and base image (this step)
-2. Ansible base role (Podman/Quadlet, updates, boot order) and usbip server role
+2. Base role (firewall, SSH, updates, logs, boot order) and usbip server role, with Molecule + QEMU tests
 3. Fedora Sway Atomic client that auto-attaches the dongles
 4. Health check and SSD migration guide
 

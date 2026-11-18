@@ -1,0 +1,77 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: USB/IP tools installed
+      ansible.builtin.command: "{{ item }} --help"
+      loop: [/usr/sbin/usbip, /usr/sbin/usbipd]
+      changed_when: false
+
+    - name: Systemd accepts the units
+      ansible.builtin.command: >-
+        systemd-analyze verify
+        /etc/systemd/system/usbipd.service
+        /etc/systemd/system/usbip-bind@.service
+      changed_when: false
+
+    - name: Gather service state
+      ansible.builtin.service_facts:
+
+    - name: Usbipd is enabled
+      ansible.builtin.assert:
+        that: ansible_facts.services['usbipd.service'].status == 'enabled'
+
+    - name: Read udev rules
+      ansible.builtin.slurp:
+        src: /etc/udev/rules.d/90-usbip-export.rules
+      register: usbip_verify_rules
+
+    - name: Rules cover the Steam dongle, XInput receivers and the port
+      ansible.builtin.assert:
+        that:
+          - "'ATTR{idVendor}==\"28de\", ATTR{idProduct}==\"1142\"' in rules"
+          - "'ATTR{idVendor}==\"045e\", ATTR{idProduct}==\"028e\"' in rules"
+          - "'KERNEL==\"1-1.3.*\"' in rules"
+      vars:
+        rules: "{{ usbip_verify_rules.content | b64decode }}"
+
+    - name: Udev can parse the rules
+      ansible.builtin.command: udevadm verify /etc/udev/rules.d/90-usbip-export.rules
+      changed_when: false
+
+    - name: USB/IP port is open to the LAN in the live firewall
+      ansible.builtin.command: nft list table inet pilab
+      register: usbip_verify_nft
+      changed_when: false
+      failed_when: "'tcp dport 3240 accept' not in usbip_verify_nft.stdout"
+
+    - name: Build a fake sysfs to exercise the export safety check
+      ansible.builtin.shell: |
+        set -e
+        s=/tmp/fakesys; rm -rf $s
+        d=$s/bus/usb/devices
+        mkdir -p $d/1-1.3/1-1.3:1.0 $d/1-1.4/1-1.4:1.0 $d/1-1.2 $d/2-1/2-1:1.0
+        mkdir -p $s/bus/usb/drivers/usbip-host
+        echo 00 > $d/1-1.3/bDeviceClass; echo 03 > $d/1-1.3/1-1.3:1.0/bInterfaceClass
+        echo 00 > $d/1-1.4/bDeviceClass; echo 03 > $d/1-1.4/1-1.4:1.0/bInterfaceClass
+        mkdir $s/bus/usb/drivers/usbip-host/1-1.4
+        echo 09 > $d/1-1.2/bDeviceClass
+        echo 00 > $d/2-1/bDeviceClass; echo 08 > $d/2-1/2-1:1.0/bInterfaceClass
+      changed_when: false
+
+    - name: Run the check against each fake device
+      ansible.builtin.command: /usr/local/libexec/usbip-bind-check {{ item }}
+      environment:
+        USBIP_SYSFS: /tmp/fakesys
+      loop: [1-1.3, 1-1.4, 1-1.2, 2-1, 9-9]
+      register: usbip_verify_check
+      changed_when: false
+      failed_when: false
+
+    - name: Only the plain HID dongle is allowed; hub, SSD, duplicates and ghosts are refused
+      ansible.builtin.assert:
+        that:
+          - usbip_verify_check.results | map(attribute='rc') | list == [0, 1, 1, 1, 1]
+        fail_msg: "{{ usbip_verify_check.results | map(attribute='stdout') | list }}"

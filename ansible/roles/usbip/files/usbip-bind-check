@@ -1,0 +1,21 @@
+#!/bin/sh
+# Used as ExecCondition by usbip-bind@.service. Exit 0 = go ahead and export,
+# exit 1 = skip quietly. Never export hubs, anything with a mass-storage
+# interface (e.g. the boot SSD), or a device that is already exported.
+# USBIP_SYSFS lets tests point this at a fake sysfs tree.
+set -u
+busid=${1:?usage: usbip-bind-check BUSID}
+sys=${USBIP_SYSFS:-/sys}
+dev="$sys/bus/usb/devices/$busid"
+
+[ -d "$dev" ] || { echo "$busid: no such device"; exit 1; }
+[ -e "$sys/bus/usb/drivers/usbip-host/$busid" ] && { echo "$busid: already exported"; exit 1; }
+[ "$(cat "$dev/bDeviceClass" 2>/dev/null)" = "09" ] && { echo "$busid: is a hub, not exporting"; exit 1; }
+for cls in "$dev"/"$busid":*/bInterfaceClass; do
+  [ -e "$cls" ] || continue
+  if [ "$(cat "$cls")" = "08" ]; then
+    echo "$busid: has a mass-storage interface, refusing to export"
+    exit 1
+  fi
+done
+exit 0
