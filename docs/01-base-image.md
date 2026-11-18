@@ -8,7 +8,7 @@ After that, Ansible does the rest.
 
 - Raspberry Pi 4 B, official 3 A USB-C power supply, Ethernet cable
 - SD card (16 GB+) now, USB 3 SSD later. The steps are the same for both.
-- A Linux machine with this repo checked out (your Fedora box works), plus
+- Raspberry Pi Imager 2.x, and a Linux machine with this repo checked out (your Fedora box works), plus
   `ansible-core` (`pip install --user ansible-core`, or use a toolbox on Fedora Atomic)
 - An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519` if needed)
 
@@ -18,34 +18,41 @@ Edit [`bootstrap/pi.env`](../bootstrap/pi.env) if you want a different hostname,
 username or timezone. If you change the username, change `ansible_user` in
 `ansible/inventory/group_vars/pis.yml` to match.
 
-For a fully reproducible build, replace `PI_IMAGE_URL=...latest` with the exact
-image URL you tested (the comment in the file shows the format).
+## 2. Flash with Raspberry Pi Imager
 
-## 2. Flash
+Imager is the safest way to write the disk: it only lists removable drives,
+shows each one's name and size, and verifies what it wrote.
 
-Find the card's device name with `lsblk` (for example `/dev/sdb` or
-`/dev/mmcblk0`), then:
+1. Install it. On Fedora Atomic: `flatpak install flathub org.raspberrypi.rpi-imager`.
+2. Device **Raspberry Pi 4**, OS **Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)**,
+   storage: your SD card (or USB SSD later).
+3. When asked about customisation, choose **No / skip**. The repo provides those
+   settings instead, so every rebuild is identical.
+4. Write, and let it finish verifying.
+
+For a fully reproducible build, download the exact `.img.xz` once, keep it, and
+use **Use custom** in Imager to flash that file every time.
+
+## 3. Add the first-boot settings
+
+Unplug and re-plug the card. Find its small FAT partition labelled `bootfs` with
+`lsblk -o NAME,LABEL,MOUNTPOINTS`. Sway doesn't auto-mount drives, so if it has no
+mount point, mount it as your user (no sudo): `udisksctl mount -b /dev/sdX1`. It
+usually lands at `/run/media/$USER/bootfs`. Then:
 
 ```bash
-sudo scripts/flash.sh /dev/sdX
+scripts/configure-boot.sh /run/media/$USER/bootfs
 ```
 
-The script:
+This only writes `user-data`, `network-config` and `meta-data` into that folder.
+It checks the folder really is a Pi boot partition first, keeps Imager's original
+files as `*.orig`, and needs no sudo. Raspberry Pi OS (Trixie and later) reads these
+files with cloud-init on first boot to set the hostname, create your user with your
+SSH key, disable password login and turn on SSH.
 
-1. Refuses to touch a mounted disk, a partition, or the disk you booted from.
-2. Downloads the image into `.cache/` (once) and checks its SHA-256.
-3. Asks you to type the device path again, then writes the image.
-4. Writes `user-data`, `network-config` and `meta-data` onto the boot partition.
-   Raspberry Pi OS (Trixie and later) reads these with cloud-init on first boot to
-   set the hostname, create your user with your SSH key, disable password login
-   and turn on SSH.
+Eject it with `udisksctl unmount -b /dev/sdX1` (or from your file manager).
 
-> **Alternative: Raspberry Pi Imager 2.x.** Choose *Raspberry Pi OS (other) →
-> Raspberry Pi OS Lite (64-bit)*, and in the customisation screens set the same
-> hostname, username, SSH public key (no password auth) and timezone. Imager writes
-> equivalent cloud-init files. Older Imager 1.9.x cannot customise Trixie images.
-
-## 3. First boot
+## 4. First boot
 
 Insert the card, plug in Ethernet, then power. Give it 2 to 3 minutes (cloud-init
 runs on first boot only). Then, from the repo:
@@ -64,8 +71,8 @@ configuration arrives with the roles in step 2.
 
 ## Troubleshooting
 
-- **SSH asks for a password:** the key in `user-data` didn't match. Re-flash with
-  `SSH_PUBKEY_FILE=/path/to/key.pub`.
+- **SSH asks for a password:** the key in `user-data` didn't match. Re-run
+  `SSH_PUBKEY_FILE=/path/to/key.pub scripts/configure-boot.sh ...` and reboot from a fresh flash.
 - **Host key warning after re-flashing:** expected, every flash makes new host keys.
   `ssh-keygen -R pilab.local`.
 - **Check what cloud-init did:** `ssh admin@pilab.local cloud-init status --long`

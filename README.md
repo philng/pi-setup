@@ -10,16 +10,19 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 | Path | What it is |
 | --- | --- |
 | `bootstrap/` | First-boot settings (cloud-init) written onto the boot partition when flashing |
-| `scripts/flash.sh` | Downloads Raspberry Pi OS Lite 64-bit, verifies it, writes it to a disk and adds the first-boot settings |
+| `scripts/configure-boot.sh` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager (plain file copy, no sudo) |
 | `ansible/` | Everything after first boot: one role per service, applied with `make apply` |
 | `docs/` | Step-by-step guides |
 
-## Rebuild in three commands
+## Rebuild
+
+1. Flash **Raspberry Pi OS Lite (64-bit)** with Raspberry Pi Imager (no customisation).
+2. Re-plug the card/SSD, then:
 
 ```bash
-make deps                          # once: install Ansible collections
-sudo scripts/flash.sh /dev/sdX     # write the SD card (or USB SSD)
-make ping && make apply            # after the Pi boots
+scripts/configure-boot.sh /run/media/$USER/bootfs   # first-boot settings
+make deps                                            # once: Ansible collections
+make ping && make apply                              # after the Pi boots
 ```
 
 See [docs/01-base-image.md](docs/01-base-image.md) for the details.
