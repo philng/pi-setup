@@ -224,6 +224,8 @@ all:
 INV
 cd "$REPO_ROOT/ansible"
 export ANSIBLE_CONFIG=$REPO_ROOT/ansible/ansible.cfg
+# Everything is slow under emulation, sudo included (default wait is 10s).
+export ANSIBLE_TIMEOUT=120
 ansible-playbook -i "$WORK/inventory.yml" --limit pilab site.yml
 endlog
 
