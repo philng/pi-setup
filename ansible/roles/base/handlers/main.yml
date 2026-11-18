@@ -15,3 +15,12 @@
   ansible.builtin.systemd_service:
     name: systemd-journald
     state: restarted
+
+- name: Restart fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: restarted
+
+- name: Re-exec systemd
+  ansible.builtin.systemd_service:
+    daemon_reexec: true

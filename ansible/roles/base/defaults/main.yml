@@ -2,9 +2,12 @@
 base_timezone: America/Los_Angeles
 
 base_packages:
+  - chrony
   - curl
+  - fail2ban
   - htop
   - nftables
+  - python3-systemd  # fail2ban's journal backend
   - unattended-upgrades
   - usbutils
 
@@ -30,3 +33,14 @@ base_journal_max_use: 64M
 # With no SD card inserted, it boots from the USB SSD.
 base_manage_eeprom: true
 base_eeprom_boot_order: "0xf41"
+
+# fail2ban: ban an address after repeated failed SSH logins (nftables ban action,
+# reads the systemd journal).
+base_fail2ban_maxretry: 5
+base_fail2ban_findtime: 10m
+base_fail2ban_bantime: 1h
+base_fail2ban_ignoreip: [127.0.0.1/8, "::1"]
+
+# Hardware watchdog: if the Pi hangs for this long, the watchdog chip reboots it.
+# The Pi's watchdog maxes out around 15s.
+base_watchdog_sec: 15

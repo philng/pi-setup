@@ -8,6 +8,12 @@
 - name: SSH hardening
   ansible.builtin.import_tasks: ssh.yml
 
+- name: Brute-force protection
+  ansible.builtin.import_tasks: fail2ban.yml
+
+- name: Time sync and watchdog
+  ansible.builtin.import_tasks: reliability.yml
+
 - name: Logging
   ansible.builtin.import_tasks: logging.yml
 

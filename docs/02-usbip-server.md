@@ -10,11 +10,17 @@
   from your LAN (private address ranges), and roles open their own ports.
   It only replaces its own table, so Podman's networking is left alone.
 - **SSH:** key-only, no root login
+- **fail2ban:** bans an address for an hour after 5 failed SSH logins in 10 minutes
+  (reads the journal, bans with nftables)
+- **Time sync with chrony** (replaces the default systemd-timesyncd)
+- **Hardware watchdog:** if the Pi hangs for 15 seconds, the watchdog chip reboots it
 - **Automatic security updates** daily from Debian and the Raspberry Pi archive
   (kernel and firmware included). Automatic reboots are off; set
   `base_auto_reboot: true` to reboot at 04:30 when an update needs it.
-- **Logs in RAM** while the system runs from an SD card (less wear). Switches to
-  normal on-disk logs automatically once you boot from the SSD.
+- **Logs in RAM** while the system runs from an SD card (less wear), using
+  journald's built-in volatile storage. Pi OS Trixie logs only to the journal, so
+  this does the job of log2ram without a third-party package. Switches to normal
+  on-disk logs automatically once you boot from the SSD.
 - **Pi 4 bootloader:** boot order "SD card, then USB". With the card removed it
   boots the SSD. Takes effect after the next reboot.
 
