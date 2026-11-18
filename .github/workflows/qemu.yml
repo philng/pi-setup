@@ -1,13 +1,16 @@
 ---
 # Boot the real Raspberry Pi OS Lite arm64 image in QEMU and apply site.yml to it.
-# Slow (emulated CPU), so it runs only when the Ansible or boot files change.
+# Slow (the whole Pi is emulated), so it runs on main, nightly, by hand, and on
+# PRs only when they carry the "qemu" label. Molecule covers the roles on every PR.
 name: qemu
 on:
-  pull_request:
-    paths: ["ansible/**", "bootstrap/**", "scripts/**", "tests/qemu/**", ".github/workflows/qemu.yml"]
   push:
     branches: [main]
     paths: ["ansible/**", "bootstrap/**", "scripts/**", "tests/qemu/**", ".github/workflows/qemu.yml"]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: "0 11 * * *"  # 03:00 Pacific
   workflow_dispatch:
 
 concurrency:
@@ -16,6 +19,9 @@ concurrency:
 
 jobs:
   pi-os:
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'qemu')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -29,14 +35,47 @@ jobs:
           sudo apt-get install -y -qq qemu-system-arm qemu-utils xz-utils
           pip install ansible-core
           make deps
-      - name: Cache the Pi OS image
-        uses: actions/cache@v4
+      - name: Which Pi OS image is current
+        id: image
+        env:
+          LATEST: https://downloads.raspberrypi.com/raspios_lite_arm64_latest
+        run: |
+          url=$(curl -fsSIL -o /dev/null -w '%{url_effective}' "$LATEST")
+          echo "name=$(basename "$url" .img.xz)" >> "$GITHUB_OUTPUT"
+      # First boot (cloud-init) only depends on the image and the first-boot files,
+      # so its result is cached and later runs boot straight into Ansible.
+      - name: Restore first-boot snapshot
+        id: firstboot
+        uses: actions/cache/restore@v4
         with:
-          path: .cache/qemu/*.img.xz
-          key: raspios-lite-arm64-${{ github.run_id }}
-          restore-keys: raspios-lite-arm64-
+          path: |
+            .cache/qemu/firstboot.qcow2
+            .cache/qemu/cmdline.boot
+            .cache/qemu/id_ci
+            .cache/qemu/id_ci.pub
+            .cache/qemu/kernel8.img
+            .cache/qemu/bcm2710-rpi-3-b-plus.dtb
+            .cache/qemu/initramfs8
+          key: >-
+            firstboot-${{ steps.image.outputs.name }}-${{
+            hashFiles('bootstrap/**', 'scripts/configure-boot.sh', 'tests/qemu/run.sh') }}
       - name: Boot Pi OS and apply site.yml twice
         run: tests/qemu/run.sh
+      - name: Save first-boot snapshot
+        if: >-
+          always() && steps.firstboot.outputs.cache-hit != 'true' &&
+          hashFiles('.cache/qemu/firstboot.qcow2') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .cache/qemu/firstboot.qcow2
+            .cache/qemu/cmdline.boot
+            .cache/qemu/id_ci
+            .cache/qemu/id_ci.pub
+            .cache/qemu/kernel8.img
+            .cache/qemu/bcm2710-rpi-3-b-plus.dtb
+            .cache/qemu/initramfs8
+          key: ${{ steps.firstboot.outputs.cache-primary-key }}
       - name: Serial console log
         if: always()
         run: tail -n 200 .cache/qemu/serial.log .cache/qemu/serial1.log || true
