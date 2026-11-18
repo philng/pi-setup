@@ -1,0 +1,15 @@
+---
+# Stand-in for a printer: a character device owned root:dialout 0660 at
+# /dev/ttyACM0, like a real USB serial port. It is a copy of /dev/null
+# (char 1,3), so writes succeed only if the container keeps the dialout group.
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Create a fake printer serial port
+      ansible.builtin.shell: |
+        set -e
+        [ -c /dev/ttyACM0 ] || mknod /dev/ttyACM0 c 1 3
+        chown root:dialout /dev/ttyACM0
+        chmod 0660 /dev/ttyACM0
+      changed_when: true

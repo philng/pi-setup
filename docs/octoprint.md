@@ -80,6 +80,23 @@ On a rebuilt Pi, `make apply` restores `backups/octoprint/latest.tar.gz`
 automatically before OctoPrint's first start, so you skip the wizard. It never
 overwrites an existing config.
 
+## 5. Smoke test on the real Pi
+
+CI already runs both roles in an arm64 Debian container (`make molecule
+ROLE=octoprint` locally): it installs everything, starts OctoPrint, checks a
+second run changes nothing, and writes to a fake serial port from inside the
+container. These are the things only the real printer can prove:
+
+- [ ] `make check LIMIT=octopi` shows no changes right after `make apply`
+- [ ] <http://octopi.local> loads after a reboot of the Pi (linger works)
+- [ ] OctoPrint's Connection panel lists `/dev/ttyACM0`, and **Connect** gets the
+      printer's firmware info in the Terminal tab (serial access works)
+- [ ] Turn the printer off and on: within a minute OctoPrint restarts and can
+      connect again (`sudo journalctl -u octoprint-replug -n 5` shows it ran)
+- [ ] Unplug and replug the USB cable while idle: same result
+- [ ] If you have a webcam: the Control tab shows the stream
+- [ ] `make octoprint-backup` creates `backups/octoprint/latest.tar.gz`
+
 ## How it works
 
 | Piece | What it does |

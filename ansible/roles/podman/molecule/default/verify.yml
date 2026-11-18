@@ -1,0 +1,33 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    podman_user: pods
+  tasks:
+    - name: Look up the container user
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ podman_user }}"
+
+    - name: Check linger is on
+      ansible.builtin.stat:
+        path: /var/lib/systemd/linger/{{ podman_user }}
+      register: podman_verify_linger
+      failed_when: not podman_verify_linger.stat.exists
+
+    - name: Run a rootless container as the user
+      become: true
+      become_user: "{{ podman_user }}"
+      environment:
+        XDG_RUNTIME_DIR: /run/user/{{ ansible_facts.getent_passwd[podman_user][1] }}
+      ansible.builtin.command: podman run --rm docker.io/library/busybox:stable id -u
+      register: podman_verify_run
+      changed_when: false
+      failed_when: podman_verify_run.stdout != '0'
+
+    - name: Check the auto-update timer is enabled  # noqa: command-instead-of-module
+      ansible.builtin.command: systemctl --user -M {{ podman_user }}@ is-enabled podman-auto-update.timer
+      register: podman_verify_timer
+      changed_when: false
+      failed_when: podman_verify_timer.stdout != 'enabled'

@@ -15,6 +15,7 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 | `scripts/configure-boot.sh` / `.ps1` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows |
 | `ansible/` | Everything after first boot: one role per service, applied with `make apply` (one Pi: `make apply LIMIT=octopi`) |
 | `docs/` | Step-by-step guides |
+| `molecule/`, `ansible/roles/*/molecule/` | Role tests in an arm64 Debian container (`make molecule ROLE=<role>`, and in CI) |
 
 ## Rebuild
 
