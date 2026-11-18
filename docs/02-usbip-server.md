@@ -87,9 +87,10 @@ Every PR runs, in CI:
 - **QEMU** (`tests/qemu/run.sh`): boots the real Raspberry Pi OS Lite image on an
   emulated Pi, uses `configure-boot.sh` for first boot, applies `site.yml` twice,
   then checks usbipd is listening, the module is loaded and the firewall is up.
-  It's slow (the whole Pi is emulated), so it runs on `main`, nightly, from the
-  Actions tab, and on a PR only when you add the **`qemu`** label. The first boot
-  is cached and reused until the Pi OS image or the first-boot files change.
+  It's slow (the whole Pi is emulated, 45+ minutes) and uses a lot of Actions
+  minutes, so it only runs when you start it by hand: Actions tab, **qemu**,
+  **Run workflow**. The first boot is cached and reused until the Pi OS image or
+  the first-boot files change.
 
 Run Molecule locally with `pip install molecule molecule-plugins[docker]` and
 `cd ansible/roles/usbip && molecule test` (needs Docker; on an x86 machine also

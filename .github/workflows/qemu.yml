@@ -1,16 +1,10 @@
 ---
 # Boot the real Raspberry Pi OS Lite arm64 image in QEMU and apply site.yml to it.
-# Slow (the whole Pi is emulated), so it runs on main, nightly, by hand, and on
-# PRs only when they carry the "qemu" label. Molecule covers the roles on every PR.
+# Slow (the whole Pi is emulated) and expensive in Actions minutes, so it only
+# runs when started by hand from the Actions tab. Molecule covers the roles on
+# every PR.
 name: qemu
 on:
-  push:
-    branches: [main]
-    paths: ["ansible/**", "bootstrap/**", "scripts/**", "tests/qemu/**", ".github/workflows/qemu.yml"]
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
-  schedule:
-    - cron: "0 11 * * *"  # 03:00 Pacific
   workflow_dispatch:
 
 concurrency:
@@ -19,9 +13,6 @@ concurrency:
 
 jobs:
   pi-os:
-    if: >-
-      github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'qemu')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
