@@ -65,3 +65,26 @@ Re-run `make apply` to pull dotfile changes.
 5. [OctoPrint on a second Pi](docs/octoprint.md)
 
 Day to day: `make apply` after changing anything, `make health` to check on the Pis.
+
+## Testing before you push
+
+CI minutes are limited on a private repo, so catch failures locally first:
+
+```bash
+pip install ansible-core ansible-lint yamllint shellcheck-py molecule "molecule-plugins[docker]" docker
+make deps && ansible-galaxy collection install community.docker   # once
+make hooks                                  # once: run `make lint` before every commit
+make test ROLE=base                         # lint, then one role's Molecule test
+make test                                   # lint, then every role
+```
+
+The Molecule tests use Docker if it is installed, otherwise Podman. On Fedora, enable
+Podman's Docker-compatible socket once with `systemctl --user enable --now podman.socket`
+(or force an engine with `make test CONTAINER_ENGINE=podman`). Locally the test
+container runs on your PC's CPU (x86_64), CI runs it on arm64.
+
+CI runs lint on every PR and push to main, Molecule on PRs only (just the roles
+the PR changes), and the boot-script checks on Linux, macOS and Windows only when
+`scripts/configure-boot.*` or `bootstrap/` change. Docs-only changes and draft PRs
+skip CI; mark a PR ready for review to run it. Every workflow can also be run by
+hand from the Actions tab.

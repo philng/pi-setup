@@ -1,7 +1,16 @@
 ANSIBLE_DIR := ansible
 export ANSIBLE_CONFIG := $(CURDIR)/$(ANSIBLE_DIR)/ansible.cfg
 
-.PHONY: deps ping apply check health lint octoprint-backup molecule-image molecule
+.PHONY: deps ping apply check health lint hooks test octoprint-backup molecule-image molecule
+
+# Container engine for the Molecule tests: Docker if installed, else Podman
+# (Fedora). Molecule's docker driver then talks to Podman's Docker-compatible
+# socket; enable it once with: systemctl --user enable --now podman.socket
+CONTAINER_ENGINE ?= $(if $(shell command -v docker 2>/dev/null),docker,podman)
+ifeq ($(CONTAINER_ENGINE),podman)
+export DOCKER_HOST ?= unix://$(XDG_RUNTIME_DIR)/podman/podman.sock
+endif
+ROLES := $(sort $(notdir $(patsubst %/molecule/default,%,$(wildcard $(ANSIBLE_DIR)/roles/*/molecule/default))))
 
 # Limit a run to one Pi or group, e.g. make apply LIMIT=octopi
 LIMIT_ARG := $(if $(LIMIT),--limit $(LIMIT))
@@ -27,10 +36,16 @@ octoprint-backup: ## Copy OctoPrint settings from the printer Pi to backups/octo
 lint: ## Lint YAML, Ansible and shell
 	yamllint .
 	cd $(ANSIBLE_DIR) && ansible-lint
-	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh .github/scripts/*.sh
+	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh .github/scripts/*.sh .githooks/pre-commit
+
+hooks: ## Lint before every commit (git pre-commit hook in .githooks/)
+	git config core.hooksPath .githooks
+
+test: lint ## Lint, then test ROLE (or every role) in a container: make test ROLE=base
+	@for role in $(or $(ROLE),$(ROLES)); do $(MAKE) --no-print-directory molecule ROLE=$$role || exit 1; done
 
 molecule-image: ## Build the Debian/systemd image Molecule tests run in
-	docker build -t pi-setup-molecule:trixie molecule/
+	$(CONTAINER_ENGINE) build -t pi-setup-molecule:trixie molecule/
 
 molecule: molecule-image ## Test one role in a container: make molecule ROLE=octoprint
 	@test -n "$(ROLE)" || { echo "usage: make molecule ROLE=<role>"; exit 1; }
