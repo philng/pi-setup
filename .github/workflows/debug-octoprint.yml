@@ -20,10 +20,13 @@ jobs:
       - name: Inspect and time a restart
         if: always()
         run: |
-          x() { docker exec pi bash -c "$1"; }
-          x 'systemctl --user -M pods@ cat octoprint.service'
-          x 'systemctl --user -M pods@ show octoprint.service -p ExecStop -p ExecStopPost -p KillMode -p KillSignal -p TimeoutStopUSec -p NotifyAccess -p Type'
-          x 'cd /tmp && sudo -u pods XDG_RUNTIME_DIR=/run/user/$(id -u pods) podman inspect octoprint --format "{{.Config.StopSignal}} {{.Config.StopTimeout}} {{.Config.Entrypoint}} {{.Config.Cmd}}"'
-          x 'date +%T.%N; time systemctl --user -M pods@ restart octoprint.service; date +%T.%N'
-          x 'journalctl --no-pager -n 150 _UID=$(id -u pods)' || true
-          x 'journalctl --no-pager -n 80' || true
+          set +e
+          u() { docker exec pi bash -c "cd /tmp && sudo -u pods XDG_RUNTIME_DIR=/run/user/\$(id -u pods) $1"; }
+          u 'systemctl --user cat octoprint.service'
+          u 'systemctl --user show octoprint.service -p ExecStart -p ExecStop -p ExecStopPost -p KillMode -p KillSignal -p TimeoutStopUSec -p Type'
+          u 'podman inspect octoprint --format "{{.Config.StopSignal}} {{.Config.StopTimeout}} {{.Config.Entrypoint}} {{.Config.Cmd}}"'
+          u 'podman ps -a'
+          docker exec pi date +%T.%N
+          u 'systemctl --user restart octoprint.service'
+          docker exec pi date +%T.%N
+          docker exec pi journalctl --no-pager -n 200 --since "-3min"
