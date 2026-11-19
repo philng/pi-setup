@@ -29,6 +29,10 @@ make deps                                            # once: Ansible collections
 make ping && make apply                              # after the Pi boots
 ```
 
+The `make` commands run on **your own computer** (Linux, macOS, or WSL on Windows),
+never on the Pi: Ansible connects to the Pis over SSH. On Windows, follow
+[docs/windows.md](docs/windows.md) to set up WSL first.
+
 See [docs/01-base-image.md](docs/01-base-image.md) for the details. Each Pi has its own
 hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
 `PI_HOSTNAME=octopi scripts/configure-boot.sh ...` (Windows: `-Hostname octopi`).
@@ -63,6 +67,7 @@ Re-run `make apply` to pull dotfile changes.
 3. [Gaming PC setup](docs/03-client.md): auto-attach on Linux, USBAnywhere on Windows
 4. [Health check and moving to the SSD](docs/04-ssd.md)
 5. [OctoPrint on a second Pi](docs/octoprint.md)
+6. [Running the setup from Windows (WSL)](docs/windows.md)
 
 Day to day: `make apply` after changing anything, `make health` to check on the Pis.
 

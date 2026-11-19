@@ -16,7 +16,8 @@ After that, Ansible does the rest.
   works the same in a Windows terminal)
 - To run Ansible afterwards: Linux or macOS with `ansible-core` (`pipx install
   ansible-core`, `brew install ansible`, or a toolbox on Fedora Atomic). Ansible
-  doesn't run natively on Windows, so use WSL there, or run it from another machine.
+  doesn't run natively on Windows, so use WSL there: see [Windows (WSL)](windows.md).
+  All `make` commands run on this computer, never on the Pi.
 
 ## 1. Review the settings
 
@@ -78,7 +79,8 @@ Eject the drive (Finder, File Explorer, or `udisksctl unmount -b /dev/sdX1` on L
 ## 4. First boot
 
 Insert the card, plug in Ethernet, then power. Give it 2 to 3 minutes (cloud-init
-runs on first boot only). Then, from the repo:
+runs on first boot only). Then, from the repo on your computer (on Windows, in the
+WSL Ubuntu window, see [windows.md](windows.md)):
 
 ```bash
 make deps   # once
