@@ -5,3 +5,4 @@ ansible/.collections/
 *.img.xz
 backups/
 .ansible/
+secrets/

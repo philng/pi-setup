@@ -9,4 +9,11 @@ octoprint_webcam_settings:
 
 # Run inside the container as the rootless user.
 octoprint_exec: podman exec octoprint
+# With stdin attached, for commands that read a password.
+octoprint_exec_stdin: podman exec -i octoprint
 octoprint_cli: "{{ octoprint_exec }} octoprint --basedir /octoprint/octoprint"
+
+# The Firmware Updater's settings version (get_settings_version() in the
+# plugin, 3 since 1.13). Written with the profile so the plugin doesn't run
+# its old-settings migration on first load, which would replace the profile.
+octoprint_firmwareupdater_settings_version: 3

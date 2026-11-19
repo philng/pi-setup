@@ -48,6 +48,32 @@ octoprint_webcam_controls: {}
 #       url: https://github.com/QuinnDamerell/OctoPrint-OctoEverywhere/archive/master.zip
 octoprint_plugins: []
 
+# OctoPrint's admin login. OctoPrint has no user until someone runs its setup
+# wizard, and until then anyone on the network can open the wizard and make
+# themselves admin. So if no active admin exists, the role creates this one
+# with a random password, saved on your computer in the file below
+# (secrets/ is git-ignored). An admin restored from a backup, or one you made
+# in the wizard, counts too, and then the role leaves users alone.
+# To pick the password yourself, set octoprint_admin_password (vault it).
+octoprint_admin_user: admin
+octoprint_admin_password_file: "{{ playbook_dir }}/../secrets/octoprint-admin-{{ inventory_hostname }}"
+octoprint_admin_password: >-
+  {{ lookup('ansible.builtin.password', octoprint_admin_password_file,
+            chars=['ascii_letters', 'digits'], length=24) }}
+
+# A flash profile for the Firmware Updater plugin (OctoPrint-FirmwareUpdater),
+# written once, when the plugin has no configured profile yet. After that,
+# change it in Settings > Firmware Updater; the role won't overwrite it.
+# Keys are the plugin's profile settings. Empty: leave the plugin alone.
+#   octoprint_firmwareupdater_profile:
+#     _name: Prusa MK3S+
+#     flash_method: avrdude
+#     avrdude_path: /usr/bin/avrdude
+#     avrdude_avrmcu: m2560
+#     avrdude_programmer: wiring
+#     avrdude_baudrate: 115200
+octoprint_firmwareupdater_profile: {}
+
 # Restore OctoPrint's data from this tarball (made by `make octoprint-backup`)
 # when the Pi has no OctoPrint config yet, i.e. after a rebuild.
 octoprint_restore_from: "{{ playbook_dir }}/../backups/octoprint/latest.tar.gz"

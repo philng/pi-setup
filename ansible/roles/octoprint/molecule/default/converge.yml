@@ -12,6 +12,18 @@
     octoprint_plugins:
       - name: OctoEverywhere
         url: https://github.com/QuinnDamerell/OctoPrint-OctoEverywhere/archive/master.zip
+      - name: OctoPrint-FirmwareUpdater
+        url: https://github.com/OctoPrint/OctoPrint-FirmwareUpdater/archive/refs/tags/1.15.0.zip
+    # Same as inventory/group_vars/printers.yml.
+    octoprint_firmwareupdater_profile:
+      _name: Prusa MK3S+
+      flash_method: avrdude
+      avrdude_path: /usr/bin/avrdude
+      avrdude_avrmcu: m2560
+      avrdude_programmer: wiring
+      avrdude_baudrate: 115200
+    # The generated admin password goes here; verify.yml logs in with it.
+    octoprint_admin_password_file: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/octoprint-admin"
   roles:
     - podman
     - octoprint

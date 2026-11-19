@@ -9,6 +9,20 @@ base_firewall_allow:
 # OctoPrint plugins installed by the octoprint role (see its defaults).
 # OctoEverywhere: remote access, notifications and Gadget AI failure
 # detection. Link it to your account once by hand: docs/octoprint.md.
+# Firmware Updater: flash Prusa's .hex files from Settings > Firmware Updater.
+# Pinned to a release tag; see docs/octoprint.md before flashing.
 octoprint_plugins:
   - name: OctoEverywhere
     url: https://github.com/QuinnDamerell/OctoPrint-OctoEverywhere/archive/master.zip
+  - name: OctoPrint-FirmwareUpdater
+    url: https://github.com/OctoPrint/OctoPrint-FirmwareUpdater/archive/refs/tags/1.15.0.zip
+
+# Firmware Updater settings for the Prusa MK3S+ (Einsy RAMBo, ATmega2560).
+# Written once; change them later in Settings > Firmware Updater.
+octoprint_firmwareupdater_profile:
+  _name: Prusa MK3S+
+  flash_method: avrdude
+  avrdude_path: /usr/bin/avrdude
+  avrdude_avrmcu: m2560
+  avrdude_programmer: wiring
+  avrdude_baudrate: 115200

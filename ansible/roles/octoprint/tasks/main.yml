@@ -137,7 +137,91 @@
   retries: 60
   delay: 5
   check_mode: false
-  when: octoprint_plugins | length > 0 or octoprint_webcam_device | length > 0
+
+# Until OctoPrint has an admin, anyone who can reach it can run the setup
+# wizard and become admin. Close that before anything else.
+- name: Look for OctoPrint's user list
+  ansible.builtin.stat:
+    path: "{{ octoprint_data_dir }}/octoprint/users.yaml"
+  register: octoprint_users_file
+
+- name: Read OctoPrint's user list
+  ansible.builtin.slurp:
+    path: "{{ octoprint_data_dir }}/octoprint/users.yaml"
+  register: octoprint_users_raw
+  when: octoprint_users_file.stat.exists
+
+- name: Find active OctoPrint admins
+  ansible.builtin.set_fact:
+    octoprint_admins: >-
+      {{ (octoprint_users_raw.content | b64decode | from_yaml | default({}, true))
+         | dict2items
+         | rejectattr('key', 'match', '^_')
+         | selectattr('value.active', 'defined') | selectattr('value.active')
+         | selectattr('value.groups', 'defined')
+         | selectattr('value.groups', 'contains', 'admins')
+         | map(attribute='key') | list
+         if octoprint_users_file.stat.exists else [] }}
+
+# The CLI reads the password twice from stdin, so it never shows up in `ps`.
+# The running server only reads users.yaml at startup, so restart it.
+- name: Create the OctoPrint admin
+  when: octoprint_admins | length == 0
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  block:
+    - name: Add the admin user
+      ansible.builtin.command:
+        cmd: >-
+          {{ octoprint_exec_stdin }} octoprint --basedir /octoprint/octoprint
+          user add --admin {{ octoprint_admin_user | quote }}
+        stdin: "{{ octoprint_admin_password }}\n{{ octoprint_admin_password }}"
+      changed_when: true
+      no_log: true
+
+    - name: Restart OctoPrint so it knows the new admin
+      ansible.builtin.systemd_service:
+        name: octoprint.service
+        scope: user
+        state: restarted
+
+    - name: Wait for OctoPrint to come back
+      ansible.builtin.uri:
+        url: http://localhost:{{ octoprint_port }}/
+        status_code: [200, 302]
+      register: octoprint_up_again
+      until: octoprint_up_again.status in [200, 302]
+      retries: 60
+      delay: 5
+
+    - name: Say where the admin password is
+      ansible.builtin.debug:
+        msg: >-
+          Created OctoPrint user '{{ octoprint_admin_user }}'.
+          {{ 'Its password is in ' ~ (octoprint_admin_password_file | realpath) ~ ' on this computer.'
+             if octoprint_admin_password_file is file
+             else 'Its password is the one set in octoprint_admin_password.' }}
+
+# Autologin would hand every visitor from the local network a logged-in
+# session, which makes the login pointless.
+- name: Read OctoPrint's autologin setting
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_cli }} config get --raw accessControl.autologinLocal"
+  register: octoprint_autologin
+  changed_when: false
+  check_mode: false
+
+- name: Turn off OctoPrint's autologin
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_cli }} config set --bool accessControl.autologinLocal false"
+  when: octoprint_autologin.stdout != 'False'
+  changed_when: true
+  notify: Restart octoprint
 
 # The image sets PIP_USER and PYTHONUSERBASE=/octoprint/plugins, so pip in
 # the container installs into the data dir, like OctoPrint's Plugin Manager.
@@ -190,5 +274,68 @@
   when:
     - item.stdout is defined
     - item.stdout != item.item.value
+  changed_when: true
+  notify: Restart octoprint
+
+# The Firmware Updater flashes the printer from inside the container, through
+# the same serial port OctoPrint uses. The official image ships avrdude.
+- name: Check the flash tool is in the OctoPrint image
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_exec }} test -x {{ octoprint_firmwareupdater_profile.avrdude_path | quote }}"
+  register: octoprint_avrdude
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: octoprint_firmwareupdater_profile.flash_method | default('') == 'avrdude'
+
+- name: Fail if the image has no avrdude
+  ansible.builtin.fail:
+    msg: >-
+      {{ octoprint_firmwareupdater_profile.avrdude_path }} isn't in {{ octoprint_image }},
+      so the Firmware Updater can't flash the printer. Use the official
+      docker.io/octoprint/octoprint image, which includes avrdude, or fix avrdude_path.
+  when:
+    - octoprint_avrdude is not skipped
+    - octoprint_avrdude.rc != 0
+
+- name: Read the Firmware Updater's flash profiles
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: "{{ octoprint_cli }} config get --json plugins.firmwareupdater.profiles"
+  register: octoprint_fwu_profiles
+  changed_when: false
+  check_mode: false
+  when: octoprint_firmwareupdater_profile | length > 0
+
+# Only when no profile has a flash method yet (fresh install, or the empty
+# "Default" profile the plugin makes for itself), so edits in the UI stay.
+- name: Write the Firmware Updater's flash profile
+  become: true
+  become_user: "{{ podman_user }}"
+  environment: "{{ podman_user_env }}"
+  ansible.builtin.command: >-
+    {{ octoprint_cli }} config set {{ item.type }}
+    plugins.firmwareupdater.{{ item.key }} {{ item.value | quote }}
+  loop:
+    - type: --json
+      key: profiles
+      value: "{{ [{'_id': 0} | combine(octoprint_firmwareupdater_profile)] | to_json }}"
+    - type: --int
+      key: _selected_profile
+      value: "0"
+    - type: --int
+      key: _config_version
+      value: "{{ octoprint_firmwareupdater_settings_version }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - octoprint_firmwareupdater_profile | length > 0
+    - >-
+      [octoprint_fwu_profiles.stdout | from_json | default([], true)] | flatten
+      | selectattr('flash_method', 'defined') | rejectattr('flash_method', 'none')
+      | list | length == 0
   changed_when: true
   notify: Restart octoprint
