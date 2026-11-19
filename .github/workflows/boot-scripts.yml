@@ -8,12 +8,16 @@ on:
     branches: [main]
     paths:
       - scripts/configure-boot.*
+      - scripts/new-pi.sh
+      - tests/bootstrap/**
       - bootstrap/**
       - .github/workflows/boot-scripts.yml
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - scripts/configure-boot.*
+      - scripts/new-pi.sh
+      - tests/bootstrap/**
       - bootstrap/**
       - .github/workflows/boot-scripts.yml
   workflow_dispatch:
@@ -74,3 +78,7 @@ jobs:
               assert open(f"{boot}/meta-data").read().strip() == f"instance-id: {host}"
           print("ok")
           PY
+      # The wizard on macOS's bash 3.2 and BSD tools (Linux runs it in the lint job).
+      - name: New-Pi wizard tests
+        if: runner.os == 'macOS'
+        run: tests/bootstrap/test-new-pi.sh

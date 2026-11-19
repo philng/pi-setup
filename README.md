@@ -12,6 +12,7 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 | Path | What it is |
 | --- | --- |
 | `bootstrap/` | First-boot settings (cloud-init) written onto the boot partition when flashing |
+| `scripts/new-pi.sh` (`make new-pi`) | Guided setup for a new or re-flashed Pi: asks its role and name, adds it to the inventory, writes the card, waits for first boot |
 | `scripts/configure-boot.sh` / `.ps1` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows |
 | `ansible/` | Everything after first boot: one role per service, applied with `make apply` (one Pi: `make apply LIMIT=octopi`) |
 | `docs/` | Step-by-step guides |
@@ -20,7 +21,9 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 ## Rebuild
 
 1. Flash **Raspberry Pi OS Lite (64-bit)** with Raspberry Pi Imager (no customisation).
-2. Re-plug the card/SSD, then:
+2. Re-plug the card/SSD, then run `make new-pi`. It asks what the Pi is for and its
+   name, adds it to the inventory, writes the first-boot settings, waits for the Pi to
+   boot, and runs Ansible. Or by hand:
 
 ```bash
 scripts/configure-boot.sh /run/media/$USER/bootfs   # first-boot settings (macOS: /Volumes/bootfs,

@@ -44,3 +44,5 @@ jobs:
       - run: make lint
       - name: Client auto-attach tests
         run: tests/client/test-autoattach.sh
+      - name: New-Pi wizard tests
+        run: tests/bootstrap/test-new-pi.sh

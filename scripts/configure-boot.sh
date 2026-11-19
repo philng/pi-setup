@@ -5,6 +5,7 @@
 #   scripts/configure-boot.sh /Volumes/bootfs           # macOS
 #   PI_HOSTNAME=octopi scripts/configure-boot.sh ...    # a different Pi
 #
+# `make new-pi` asks the questions and runs this for you.
 # (Windows: use configure-boot.ps1.) Works with macOS's bash 3.2.
 #
 # Flash the card/SSD with Raspberry Pi Imager first (no customisation needed),
@@ -20,6 +21,16 @@ BOOT=$1
 
 # shellcheck source=/dev/null
 source "$REPO_ROOT/bootstrap/pi.env"
+# The login user comes from Ansible's settings, so the two can't disagree.
+GROUP_VARS=$REPO_ROOT/ansible/inventory/group_vars/pis.yml
+PI_USER=$(sed -n 's/^ansible_user:[[:space:]]*//p' "$GROUP_VARS" | tr -d "\"' \r")
+[[ -n $PI_USER ]] || die "no ansible_user in $GROUP_VARS"
+[[ $PI_HOSTNAME =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] \
+  || die "'$PI_HOSTNAME' isn't a valid hostname: use lowercase letters, digits and dashes"
+if ! grep -qE "^ {12}$PI_HOSTNAME:[[:space:]]*\$" "$REPO_ROOT/ansible/inventory/hosts.yml"; then
+  echo "warning: $PI_HOSTNAME is not in ansible/inventory/hosts.yml, so Ansible won't configure it." >&2
+  echo "         Add it under usbip or printers there (make new-pi does this for you)." >&2
+fi
 
 # Make sure this really is a Raspberry Pi boot partition.
 [[ -d $BOOT ]] || die "$BOOT is not a directory"

@@ -1,5 +1,5 @@
 ---
-# Login user that gets zsh and the dotfiles. Must match bootstrap/pi.env.
+# Login user that gets zsh and the dotfiles. Set in group_vars/pis.yml.
 dotfiles_user: admin
 # Public repo, cloned on the Pi over HTTPS. Its files under home/ are linked
 # into the user's home, like the repo's own install.sh does.
