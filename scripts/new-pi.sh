@@ -140,7 +140,9 @@ login_user() {
 
 valid_hostname() { [[ $1 =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; }
 
-is_wsl() { grep -qi microsoft /proc/version 2>/dev/null; }
+is_wsl() { [[ -n ${NEW_PI_WSL:-} ]] || grep -qi microsoft /proc/version 2>/dev/null; }
+# Where WSL mounts Windows drives (tests point this elsewhere).
+WSL_MNT=${NEW_PI_WSL_MNT:-/mnt}
 is_bootfs() { [[ -d $1 && -f $1/config.txt && -f $1/cmdline.txt ]]; }
 
 # --- Waiting for the Pi ------------------------------------------------------
@@ -349,7 +351,7 @@ say "computer sees its small 'bootfs' partition."
 wsl_mount() {  # wsl_mount E: -> prints /mnt/e after mounting it if needed
   local letter dir
   letter=$(printf '%s' "${1%%:*}" | tr '[:upper:]' '[:lower:]')
-  dir=/mnt/$letter
+  dir=$WSL_MNT/$letter
   if ! is_bootfs "$dir"; then
     say "Mounting drive $(printf '%s' "$letter" | tr '[:lower:]' '[:upper:]'): at $dir (needs sudo)..." >&2
     sudo mkdir -p "$dir"
@@ -364,7 +366,7 @@ find_bootfs() {  # print every mounted bootfs we can see, one per line
     is_bootfs "$d" && printf '%s\n' "$d"
   done
   if is_wsl; then
-    for d in /mnt/[a-z]; do is_bootfs "$d" && printf '%s\n' "$d"; done
+    for d in "$WSL_MNT"/[a-z]; do is_bootfs "$d" && printf '%s\n' "$d"; done
   fi
   return 0
 }
@@ -382,6 +384,21 @@ try_udisks_mount() {
   printf '%s' "$out"
 }
 
+# WSL: ask Windows which drive letter has the "bootfs" label, and mount it.
+try_windows_drive() {
+  local ps letter
+  ps=$(command -v powershell.exe || true)
+  [[ -n $ps ]] || ps=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+  [[ -x $ps ]] || return 1
+  letter=$("$ps" -NoProfile -NonInteractive -Command \
+    "Get-CimInstance Win32_LogicalDisk -Filter \"VolumeName='bootfs'\" | ForEach-Object { \$_.DeviceID }" \
+    2>/dev/null | tr -d '\r' | grep -E '^[A-Za-z]:$' | head -n1)
+  [[ -n $letter ]] || return 1
+  say "Windows has the bootfs partition as drive $letter." >&2
+  confirm "Mount it in WSL at $WSL_MNT/$(printf '%s' "${letter%:}" | tr '[:upper:]' '[:lower:]') (needs sudo)?" Y >&2 || return 1
+  wsl_mount "$letter"
+}
+
 if [[ -n $BOOT ]]; then
   if [[ $BOOT =~ ^[A-Za-z]:[\\/]?$ ]]; then
     is_wsl || die "drive letters like $BOOT only work in WSL; on Windows without WSL use scripts\\configure-boot.ps1"
@@ -390,7 +407,10 @@ if [[ -n $BOOT ]]; then
 else
   while :; do
     found=$(find_bootfs)
-    if [[ -z $found ]] && ! is_wsl; then found=$(try_udisks_mount || true); fi
+    if [[ -z $found ]]; then  # plugged in but not mounted? Offer to mount it.
+      if is_wsl; then mounted=$(try_windows_drive || true); else mounted=$(try_udisks_mount || true); fi
+      if [[ -n $mounted ]]; then BOOT=$mounted; ok "mounted at $BOOT"; break; fi
+    fi
     n=$(printf '%s' "$found" | grep -c . || true)
     if [[ $n -eq 1 ]]; then
       say "Found: $found"

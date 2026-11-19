@@ -8,8 +8,8 @@ to log in to a Pi to set it up.
 Ansible doesn't run natively on Windows, so on Windows you run those commands inside
 **WSL** (Windows Subsystem for Linux), which gives you a small Ubuntu install next to
 Windows. Flash the card with Raspberry Pi Imager in normal Windows, then run
-`make new-pi` in WSL: it asks for the drive letter File Explorer gave the card's
-`bootfs` partition (for example `E:`), writes the first-boot settings there, and
+`make new-pi` in WSL: it asks Windows which drive is the card's `bootfs`
+partition (for example `E:`), offers to mount it in WSL, writes the first-boot settings there, and
 waits for the Pi to boot (see [step 1](01-base-image.md)). `scripts\configure-boot.ps1`
 still works from plain PowerShell if you'd rather not use WSL for that part.
 

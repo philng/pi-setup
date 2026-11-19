@@ -127,5 +127,22 @@ if PI_HOSTNAME=stray SSH_PUBKEY_FILE=$WORK/home/.ssh/id_ed25519.pub \
   pass "configure-boot warns on unknown host"
 else fail "configure-boot warns on unknown host"; cat "$WORK/out"; fi
 
+# 11. WSL: Windows reports the bootfs drive letter; the wizard mounts it and uses it.
+setup
+mkdir -p "$WORK/mnt/e"
+printf '#!/usr/bin/env bash\nprintf "E:\\r\\n"\n' > "$WORK/bin/powershell.exe"
+# Fake sudo: "mount" makes the target look like the card's boot partition.
+cat > "$WORK/bin/sudo" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = mount ]; then touch "$WORK/mnt/e/config.txt" "$WORK/mnt/e/cmdline.txt"; exit 0; fi
+exec "\$@"
+EOF
+chmod +x "$WORK/bin/powershell.exe" "$WORK/bin/sudo"
+if NEW_PI_WSL=1 NEW_PI_WSL_MNT=$WORK/mnt run --yes --role printer --hostname octopi >"$WORK/out" 2>&1 \
+  && grep -q "drive E:" "$WORK/out" && grep -q "^hostname: octopi" "$WORK/mnt/e/user-data"; then
+  pass "WSL drive letter auto-detected"
+else fail "WSL drive letter auto-detected"; cat "$WORK/out"; fi
+rm -f "$WORK/bin/powershell.exe" "$WORK/bin/sudo"
+
 [[ $fails -eq 0 ]] || { echo "$fails test(s) failed"; exit 1; }
 echo "all new-pi tests passed"

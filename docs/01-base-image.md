@@ -41,8 +41,9 @@ It walks you through the rest and explains each step:
    `~/.ssh/id_ed25519.pub`, or to create a key if you have none.
 4. **The card.** It finds the mounted `bootfs` partition: `/Volumes/bootfs` on macOS,
    `/run/media/$USER/bootfs` on Linux (offering to mount it with `udisksctl` if Sway
-   didn't), or in WSL the drive letter File Explorer shows (it mounts `E:` at
-   `/mnt/e` with sudo). After a summary and a yes, it runs `configure-boot.sh` and
+   didn't), or in WSL by asking Windows which drive is labelled `bootfs` and
+   offering to mount it (for example `E:` at `/mnt/e`, with sudo). If it can't
+   find one, it asks for the path or drive letter. After a summary and a yes, it runs `configure-boot.sh` and
    offers to eject.
 5. **First boot.** Put the card in the Pi, plug in Ethernet and power, press Enter,
    and it waits until `ssh admin@<name>.local` works, with a plain-English hint if
