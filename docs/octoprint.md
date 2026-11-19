@@ -66,9 +66,9 @@ OctoPrint sees the printer as `/dev/ttyACM0`, so its auto-detect finds it.
 make apply LIMIT=octopi
 ```
 
-Then open <http://octopi.local> and run OctoPrint's setup wizard once (create
-your user, printer profile, etc.). The first start pulls the image, which can
-take a few minutes on a Pi. For the MK3S+, the serial baud rate is 115200
+Then open <http://octopi.local>, log in (see [Login](#login) below) and run
+OctoPrint's setup wizard once (printer profile, etc.). The first start pulls
+the image, which can take a few minutes on a Pi. For the MK3S+, the serial baud rate is 115200
 (leave it on AUTO or pick it), and the print bed is 250 x 210 x 210 mm.
 
 If you set a webcam, the role already fills these in, as the image's docs
@@ -79,6 +79,27 @@ ask, so you don't need to touch them:
 
 The role puts back the URLs and FFMPEG path above on every `make apply` (and
 restarts OctoPrint if it had to). Other webcam settings are yours to change.
+
+### Login
+
+A fresh OctoPrint has no users, and until someone finishes its setup wizard,
+anyone who can open the page can create the admin account. So the role
+creates an admin on its first run, before you get there:
+
+- user `admin`, with a random password saved on your computer in
+  `secrets/octoprint-admin-octopi` (git-ignored, like `backups/`). The
+  `make apply` output says so when it creates it.
+- It only does this when OctoPrint has no active admin. If you already made
+  one in the wizard, or a backup brings one back, the role leaves users alone.
+- To choose the name or password yourself, set `octoprint_admin_user` and
+  `octoprint_admin_password` in `host_vars/octopi.yml` before the first
+  apply (put the password in Ansible Vault, the repo is public).
+- Change the password later in OctoPrint (your user menu > User Settings);
+  the file isn't updated then, so delete it to avoid confusion.
+
+The role also keeps `accessControl.autologinLocal` off, so nobody on the
+LAN gets logged in automatically. OctoEverywhere and the API use their own
+keys and aren't affected.
 
 ### Plugins
 
@@ -117,6 +138,41 @@ Gadget looks at the snapshot URL above, so it needs `octoprint_webcam_device`
 set. The plugin's key is in OctoPrint's `config.yaml`, which the backup
 contains: anyone with that tarball can reach your printer, so keep it safe
 (it's already git-ignored). To unlink, remove the printer on octoeverywhere.com.
+
+### Firmware updates (Firmware Updater)
+
+The [Firmware Updater](https://github.com/OctoPrint/OctoPrint-FirmwareUpdater)
+plugin flashes the printer's firmware from OctoPrint, so you don't have to
+carry a laptop to the printer. It's in `octoprint_plugins`, pinned to a
+release tag, and the role sets up a flash profile for the MK3S+ the first time:
+avrdude, ATmega2560, programmer `wiring`, 115200 baud. `avrdude` is already in
+the official OctoPrint image, and it uses the same serial port as OctoPrint,
+so nothing else is needed. You can change the profile in Settings > Firmware
+Updater; the role won't overwrite it.
+
+To flash:
+
+1. Download the MK3S+ firmware from Prusa's site (help.prusa3d.com, search
+   "MK3S+ firmware") and unzip it. Use the `.hex` made for the MK3S/MK3S+
+   (its name contains `MK3S`), never one for the MK3 or MK2.5S.
+2. Make sure nothing is printing. In OctoPrint, Settings > Firmware Updater,
+   pick the `Prusa MK3S+` profile and `/dev/ttyACM0`, choose the `.hex` and
+   click **Flash from File**. OctoPrint disconnects, avrdude writes and
+   verifies the firmware (a minute or two), then OctoPrint reconnects.
+3. The printer reboots. Check the version in its LCD menu (Support) and run
+   a quick test print.
+
+Things to know:
+
+- Anyone who can log in to OctoPrint as admin can flash firmware; that's why
+  the role sets up the login above.
+- If the printer's screen uses a language other than English, flash with
+  PrusaSlicer instead (Configuration > Flash printer firmware): Prusa's
+  multi-language files carry language data that avrdude may not write, so
+  the printer can come back in English.
+- If a flash fails halfway, the printer's bootloader is untouched, so it
+  still accepts a new flash. Retry from OctoPrint, or plug the printer into
+  a computer and use PrusaSlicer's Flash printer firmware.
 
 ### Lock the webcam's focus
 
@@ -162,7 +218,12 @@ CI already runs both roles in an arm64 Debian container (`make molecule
 ROLE=octoprint` locally): it installs everything, starts OctoPrint, checks a
 second run changes nothing, and writes to a fake serial port from inside the
 container. It also installs OctoEverywhere, checks OctoPrint loads it, checks
-the webcam snapshot URL is set, and checks the udev rule for a fake C920. These are the things only the real printer can prove:
+the webcam snapshot URL is set, and checks the udev rule for a fake C920.
+It installs the pinned Firmware Updater, checks it loads with the MK3S+
+profile selected and that avrdude knows the ATmega2560 and `wiring`; and it
+checks the generated admin can log in while a visitor can no longer create an
+admin through the setup wizard. These are the things only the real printer
+can prove:
 
 - [ ] `make check LIMIT=octopi` shows no changes right after `make apply`
 - [ ] <http://octopi.local> loads after a reboot of the Pi (linger works)
@@ -181,6 +242,17 @@ the webcam snapshot URL is set, and checks the udev rule for a fake C920. These 
       as online on octoeverywhere.com with a live webcam preview
 - [ ] Gadget: start a print and check octoeverywhere.com shows Gadget
       watching it (the printer page shows its status and last check)
+- [ ] Login is required: <http://octopi.local> in a private browser window
+      shows the login page, and the password in
+      `secrets/octoprint-admin-octopi` (or your own user's) works
+- [ ] Settings > Firmware Updater shows the `Prusa MK3S+` profile (avrdude,
+      ATmega2560, wiring, 115200) with avrdude path `/usr/bin/avrdude`
+- [ ] Flash test, idle printer: flash the same firmware version that's on the
+      printer now (LCD > Support shows it). The log shows avrdude writing and
+      verifying, OctoPrint reconnects by itself, the LCD shows the same
+      version, and a short test print works
+- [ ] During that flash, `sudo journalctl -u octoprint-replug -f` stays quiet
+      (the printer's USB link stays up, so OctoPrint isn't restarted mid-flash)
 - [ ] `make octoprint-backup` creates `backups/octoprint/latest.tar.gz`
 
 ## How it works
@@ -194,6 +266,8 @@ the webcam snapshot URL is set, and checks the udev rule for a fake C920. These 
 | Plugins | `pip install <url>` via `podman exec`. The image sets `PIP_USER` and `PYTHONUSERBASE=/octoprint/plugins`, so they land in the data dir and survive image updates. The role checks with `pip show <name>` first, so it only installs what's missing |
 | Webcam settings | `octoprint config set` inside the container, after OctoPrint is up, then a restart. Only the stream URL, snapshot URL and FFMPEG path are managed |
 | Webcam controls | `/etc/udev/rules.d/70-octoprint.rules` matches the camera by the serial number in its `by-id` name and runs `v4l2-ctl` for each control |
+| Admin login | If `users.yaml` has no active admin, `octoprint user add --admin` inside the container (password on stdin, from `octoprint_admin_password`, by default a random one kept in `secrets/`), then a restart so the server loads it. Also keeps `accessControl.autologinLocal` false |
+| Firmware Updater | Installed like any plugin, pinned to a release tag. When it has no profile with a flash method, the role writes `octoprint_firmwareupdater_profile` with `octoprint config set` (plus the plugin's settings version, so its first-load migration doesn't replace it). The role first checks the image has the profile's `avrdude_path` |
 | Printer power-cycles | Quadlet only passes a device that exists when the unit is generated, and a running container never sees new devices. A udev rule starts `octoprint-replug.service` whenever a USB serial port (or webcam) appears, which regenerates the unit and restarts OctoPrint if it is running |
 
 Useful commands on the Pi:

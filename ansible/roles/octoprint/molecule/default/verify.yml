@@ -114,3 +114,143 @@
     - name: Check udev accepts the rules file
       ansible.builtin.command: udevadm verify /etc/udev/rules.d/70-octoprint.rules
       changed_when: false
+
+    - name: Check the Firmware Updater is installed, at the pinned version
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.command: podman exec octoprint pip show OctoPrint-FirmwareUpdater
+      register: octoprint_verify_fwu
+      changed_when: false
+      failed_when: >-
+        octoprint_verify_fwu.rc != 0
+        or 'Version: 1.15.0' not in octoprint_verify_fwu.stdout
+        or 'Location: /octoprint/plugins/' not in octoprint_verify_fwu.stdout
+
+    - name: Check OctoPrint loaded the Firmware Updater
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.command: >-
+        podman exec octoprint grep -cE '\| +Firmware Updater \(1\.15\.0\)'
+        /octoprint/octoprint/logs/octoprint.log
+      register: octoprint_verify_fwu_loaded
+      changed_when: false
+      until: octoprint_verify_fwu_loaded.rc == 0
+      retries: 24
+      delay: 5
+
+    # Read after the plugin has loaded, so this also shows its first-load
+    # settings migration didn't replace the profile.
+    - name: Read the Firmware Updater's settings
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.command: >-
+        podman exec octoprint octoprint --basedir /octoprint/octoprint
+        config get --json plugins.firmwareupdater
+      register: octoprint_verify_fwu_settings
+      changed_when: false
+
+    - name: Check the MK3S+ flash profile is selected
+      vars:
+        fwu: "{{ octoprint_verify_fwu_settings.stdout | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - fwu._selected_profile == 0
+          - fwu.profiles | length == 1
+          - fwu.profiles[0]._name == 'Prusa MK3S+'
+          - fwu.profiles[0].flash_method == 'avrdude'
+          - fwu.profiles[0].avrdude_path == '/usr/bin/avrdude'
+          - fwu.profiles[0].avrdude_avrmcu == 'm2560'
+          - fwu.profiles[0].avrdude_programmer == 'wiring'
+          - fwu.profiles[0].avrdude_baudrate | int == 115200
+
+    - name: Check avrdude in the container knows the MK3S+ chip and programmer
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -eo pipefail
+          # Listing parts or programmers exits non-zero, so check the text.
+          parts=$(podman exec octoprint avrdude -p '?' 2>&1 || true)
+          programmers=$(podman exec octoprint avrdude -c '?' 2>&1 || true)
+          grep -qw m2560 <<<"$parts"
+          grep -qw wiring <<<"$programmers"
+      changed_when: false
+
+    - name: Read OctoPrint's user list
+      ansible.builtin.slurp:
+        path: /home/{{ podman_user }}/octoprint/octoprint/users.yaml
+      register: octoprint_verify_users
+
+    - name: Check exactly one user exists, the admin the role created
+      vars:
+        users: "{{ octoprint_verify_users.content | b64decode | from_yaml }}"
+      ansible.builtin.assert:
+        that:
+          - users | dict2items | rejectattr('key', 'match', '^_') | list | length == 1
+          - users.admin.active
+          - "'admins' in users.admin.groups"
+
+    - name: Check local autologin is off
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ octoprint_verify_env }}"
+      ansible.builtin.command: >-
+        podman exec octoprint octoprint --basedir /octoprint/octoprint
+        config get --raw accessControl.autologinLocal
+      register: octoprint_verify_autologin
+      changed_when: false
+      failed_when: octoprint_verify_autologin.stdout != 'False'
+
+    # OctoPrint wants its CSRF cookie echoed back in a header on POSTs.
+    - name: Get a session cookie like a browser would
+      ansible.builtin.uri:
+        url: http://localhost/
+      register: octoprint_verify_page
+
+    - name: Remember the cookie and its CSRF token
+      ansible.builtin.set_fact:
+        octoprint_verify_headers:
+          Cookie: "{{ octoprint_verify_page.cookies_string }}"
+          X-CSRF-Token: >-
+            {{ (octoprint_verify_page.cookies | dict2items
+                | selectattr('key', 'match', '^csrf_token') | first).value }}
+
+    # On a fresh OctoPrint this request creates an admin (HTTP 204).
+    - name: Check a visitor can't make themselves admin through the setup wizard
+      ansible.builtin.uri:
+        url: http://localhost/plugin/corewizard/acl
+        method: POST
+        headers: "{{ octoprint_verify_headers }}"
+        body_format: json
+        body: {user: intruder, pass1: intruder123, pass2: intruder123}
+        status_code: 403
+
+    - name: Check a wrong password is refused
+      ansible.builtin.uri:
+        url: http://localhost/api/login
+        method: POST
+        headers: "{{ octoprint_verify_headers }}"
+        body_format: json
+        body: {user: admin, pass: not-the-password}
+        status_code: 403
+
+    - name: Check the admin can log in with the generated password
+      ansible.builtin.uri:
+        url: http://localhost/api/login
+        method: POST
+        headers: "{{ octoprint_verify_headers }}"
+        body_format: json
+        body:
+          user: admin
+          pass: "{{ lookup('file', lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') ~ '/octoprint-admin') }}"
+        return_content: true
+      register: octoprint_verify_login
+      failed_when: >-
+        octoprint_verify_login.status != 200
+        or 'admins' not in octoprint_verify_login.json.groups
+      no_log: true
