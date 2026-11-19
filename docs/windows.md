@@ -1,0 +1,113 @@
+# Running the setup from Windows (WSL)
+
+Every `make` command in this repo (`make deps`, `make ping`, `make apply`,
+`make health`, ...) runs **on your own computer**, never on the Pi. Your computer
+connects to the Pis over SSH and Ansible configures them from there. You never need
+to log in to a Pi to set it up.
+
+Ansible doesn't run natively on Windows, so on Windows you run those commands inside
+**WSL** (Windows Subsystem for Linux), which gives you a small Ubuntu install next to
+Windows. Flashing the card and `scripts\configure-boot.ps1` still run in normal
+Windows, as in [step 1](01-base-image.md).
+
+## 1. Install WSL (once)
+
+Open **PowerShell as administrator** (Start, type "PowerShell", right-click,
+**Run as administrator**) and run:
+
+```powershell
+wsl --install
+```
+
+Reboot when asked. Ubuntu then opens and asks you to pick a Linux username and
+password (they don't have to match your Windows ones). Afterwards, open Ubuntu from
+the Start menu or with `wsl` in any terminal. Everything below runs in that Ubuntu
+window.
+
+## 2. Install the tools (once)
+
+```bash
+sudo apt update
+sudo apt install -y git make pipx openssh-client
+pipx ensurepath
+pipx install ansible-core
+```
+
+Close and reopen the Ubuntu window so `ansible` is on your `PATH`, then check with
+`ansible --version`.
+
+## 3. Get the repo inside WSL (once)
+
+Clone it into your Linux home folder, **not** under `/mnt/c/...`. Windows folders
+show up in WSL with every file world-writable, which SSH refuses for keys, and
+Windows line endings can break the scripts.
+
+```bash
+cd ~
+git clone https://github.com/philng/pi-setup.git
+cd pi-setup
+```
+
+The repo is private, so git asks you to sign in. Use a GitHub personal access token
+as the password, or install the [GitHub CLI](https://cli.github.com/) in Ubuntu
+and run `gh auth login` first.
+
+## 4. Use the same SSH key as Windows (once)
+
+`configure-boot.ps1` put your **Windows** key (`C:\Users\<you>\.ssh\id_ed25519.pub`)
+on the Pi, so copy that key pair into WSL and give it the permissions SSH insists on.
+Replace `<you>` with your Windows username:
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+cp /mnt/c/Users/<you>/.ssh/id_ed25519 /mnt/c/Users/<you>/.ssh/id_ed25519.pub ~/.ssh/
+chmod 600 ~/.ssh/id_ed25519
+chmod 644 ~/.ssh/id_ed25519.pub
+```
+
+If you don't have a Windows key yet, create one in Ubuntu with
+`ssh-keygen -t ed25519` instead and flash with it:
+`scripts\configure-boot.ps1 -SshPubKeyFile \\wsl.localhost\Ubuntu\home\<linux-user>\.ssh\id_ed25519.pub E:\`.
+
+## 5. Run Ansible
+
+From `~/pi-setup` in Ubuntu, the same commands as on Linux or macOS:
+
+```bash
+make deps                   # once: Ansible collections
+make ping                   # expect: pilab | SUCCESS => "ping": "pong"
+make apply                  # configure every Pi
+make apply LIMIT=octopi     # or just one
+```
+
+The first connection to each Pi asks you to confirm its host key; type `yes`.
+
+## If `pilab.local` / `octopi.local` doesn't resolve
+
+WSL often can't look up `.local` names, even when Windows can. `make ping` then
+fails with `Could not resolve hostname`. Find each Pi's IP address, either on your
+router's device list or in PowerShell with:
+
+```powershell
+Resolve-DnsName pilab.local -Type A
+```
+
+Then, in `ansible/inventory/hosts.yml`, replace `pilab.local` (and `octopi.local`)
+after `ansible_host:` with the IP, for example `ansible_host: 192.168.1.50`. Give each
+Pi a DHCP reservation on your router so the address never changes.
+
+On Windows 11 you can instead try WSL's mirrored networking, which shares Windows'
+network setup: create `C:\Users\<you>\.wslconfig` containing
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+then run `wsl --shutdown` in PowerShell and reopen Ubuntu.
+
+## Day to day
+
+Open Ubuntu, `cd ~/pi-setup`, `git pull`, then `make apply` or `make health`.
+To edit files with Windows apps, open `\\wsl.localhost\Ubuntu\home\<linux-user>\pi-setup`
+in File Explorer, or run `code .` from Ubuntu if you use VS Code.
