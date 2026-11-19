@@ -1,5 +1,6 @@
 #cloud-config
-# Rendered by scripts/configure-boot.sh. @VARS@ come from bootstrap/pi.env.
+# Rendered by scripts/configure-boot.sh. @VARS@ come from bootstrap/pi.env,
+# except @PI_USER@: ansible_user in ansible/inventory/group_vars/pis.yml.
 hostname: @PI_HOSTNAME@
 manage_etc_hosts: true
 timezone: @PI_TIMEZONE@

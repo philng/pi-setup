@@ -1,3 +1,4 @@
 ---
-# Must match bootstrap/pi.env
+# The login user on every Pi. scripts/configure-boot.sh reads it from here
+# and creates it on first boot, so change it only here (then re-flash).
 ansible_user: admin

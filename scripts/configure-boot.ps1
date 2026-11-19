@@ -30,6 +30,19 @@ foreach ($line in Get-Content (Join-Path $RepoRoot 'bootstrap/pi.env')) {
     }
 }
 if ($Hostname) { $cfg['PI_HOSTNAME'] = $Hostname }
+# The login user comes from Ansible's settings, so the two can't disagree.
+$groupVars = Join-Path $RepoRoot 'ansible/inventory/group_vars/pis.yml'
+$userLine = Get-Content $groupVars | Where-Object { $_ -match '^ansible_user:\s*(\S+)' } | Select-Object -First 1
+if (-not $userLine) { throw "no ansible_user in $groupVars" }
+$null = $userLine -match '^ansible_user:\s*(\S+)'
+$cfg['PI_USER'] = $Matches[1].Trim('"', "'")
+if ($cfg['PI_HOSTNAME'] -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+    throw "'$($cfg['PI_HOSTNAME'])' isn't a valid hostname: use lowercase letters, digits and dashes"
+}
+$inv = Get-Content (Join-Path $RepoRoot 'ansible/inventory/hosts.yml')
+if (-not ($inv | Where-Object { $_ -cmatch "^ {12}$([regex]::Escape($cfg['PI_HOSTNAME'])):\s*$" })) {
+    Write-Warning "$($cfg['PI_HOSTNAME']) is not in ansible/inventory/hosts.yml, so Ansible won't configure it. Add it under usbip or printers there."
+}
 if (-not $SshPubKeyFile) {
     $SshPubKeyFile = if ($env:SSH_PUBKEY_FILE) { $env:SSH_PUBKEY_FILE } `
                      else { Join-Path $HOME '.ssh\id_ed25519.pub' }

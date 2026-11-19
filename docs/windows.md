@@ -7,8 +7,11 @@ to log in to a Pi to set it up.
 
 Ansible doesn't run natively on Windows, so on Windows you run those commands inside
 **WSL** (Windows Subsystem for Linux), which gives you a small Ubuntu install next to
-Windows. Flashing the card and `scripts\configure-boot.ps1` still run in normal
-Windows, as in [step 1](01-base-image.md).
+Windows. Flash the card with Raspberry Pi Imager in normal Windows, then run
+`make new-pi` in WSL: it asks for the drive letter File Explorer gave the card's
+`bootfs` partition (for example `E:`), writes the first-boot settings there, and
+waits for the Pi to boot (see [step 1](01-base-image.md)). `scripts\configure-boot.ps1`
+still works from plain PowerShell if you'd rather not use WSL for that part.
 
 ## 1. Install WSL (once)
 
@@ -53,6 +56,10 @@ as the password, or install the [GitHub CLI](https://cli.github.com/) in Ubuntu
 and run `gh auth login` first.
 
 ## 4. Use the same SSH key as Windows (once)
+
+Skip this if you set up the card with `make new-pi` in WSL: that puts your WSL key
+(`~/.ssh/id_ed25519.pub` in Ubuntu) on the Pi, and offers to create one if you have
+none. Only cards written with `configure-boot.ps1` need the step below.
 
 `configure-boot.ps1` put your **Windows** key (`C:\Users\<you>\.ssh\id_ed25519.pub`)
 on the Pi, so copy that key pair into WSL and give it the permissions SSH insists on.

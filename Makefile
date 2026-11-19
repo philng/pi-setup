@@ -1,7 +1,11 @@
 ANSIBLE_DIR := ansible
 export ANSIBLE_CONFIG := $(CURDIR)/$(ANSIBLE_DIR)/ansible.cfg
 
-.PHONY: deps ping apply check health lint hooks test octoprint-backup molecule-image molecule
+# Every target runs on YOUR computer (Linux, macOS, or WSL on Windows), never on
+# the Pi: Ansible reaches the Pis over SSH. Run `make` alone for this list.
+.DEFAULT_GOAL := help
+
+.PHONY: help new-pi wait-pi deps ping apply check health lint hooks test octoprint-backup molecule-image molecule
 
 # Container engine for the Molecule tests: Docker if installed, else Podman
 # (Fedora). Molecule's docker driver then talks to Podman's Docker-compatible
@@ -14,6 +18,17 @@ ROLES := $(sort $(notdir $(patsubst %/molecule/default,%,$(wildcard $(ANSIBLE_DI
 
 # Limit a run to one Pi or group, e.g. make apply LIMIT=octopi
 LIMIT_ARG := $(if $(LIMIT),--limit $(LIMIT))
+
+help: ## List the targets
+	@echo "Run these on your computer, from the repo folder. New Pi? Start with: make new-pi"
+	@awk -F ':.*## ' '/^[a-z-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+new-pi: ## Guided setup for a new or re-flashed Pi: inventory, card, first boot
+	scripts/new-pi.sh $(ARGS)
+
+wait-pi: ## Wait for a freshly flashed Pi to answer on SSH: make wait-pi HOST=octopi
+	@test -n "$(HOST)" || { echo "usage: make wait-pi HOST=<hostname>"; exit 1; }
+	scripts/new-pi.sh --wait --hostname $(HOST)
 
 deps: ## Install Ansible collections
 	cd $(ANSIBLE_DIR) && ansible-galaxy collection install -r requirements.yml
@@ -36,7 +51,7 @@ octoprint-backup: ## Copy OctoPrint settings from the printer Pi to backups/octo
 lint: ## Lint YAML, Ansible and shell
 	yamllint .
 	cd $(ANSIBLE_DIR) && ansible-lint
-	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh .github/scripts/*.sh .githooks/pre-commit
+	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh tests/bootstrap/*.sh .github/scripts/*.sh .githooks/pre-commit
 
 hooks: ## Lint before every commit (git pre-commit hook in .githooks/)
 	git config core.hooksPath .githooks
