@@ -5,13 +5,13 @@ Every `make` command in this repo (`make deps`, `make ping`, `make apply`,
 connects to the Pis over SSH and Ansible configures them from there. You never need
 to log in to a Pi to set it up.
 
-Ansible doesn't run natively on Windows, so on Windows you run those commands inside
+On Windows, this repo runs only inside
 **WSL** (Windows Subsystem for Linux), which gives you a small Ubuntu install next to
 Windows. Flash the card with Raspberry Pi Imager in normal Windows, then run
 `make new-pi` in WSL: it asks Windows which drive is the card's `bootfs`
 partition (for example `E:`), offers to mount it in WSL, writes the first-boot settings there, and
-waits for the Pi to boot (see [step 1](01-base-image.md)). `scripts\configure-boot.ps1`
-still works from plain PowerShell if you'd rather not use WSL for that part.
+waits for the Pi to boot (see [step 1](01-base-image.md)). Raspberry Pi Imager is the
+only part that runs in Windows itself.
 
 ## 1. Install WSL (once)
 
@@ -55,15 +55,14 @@ The repo is private, so git asks you to sign in. Use a GitHub personal access to
 as the password, or install the [GitHub CLI](https://cli.github.com/) in Ubuntu
 and run `gh auth login` first.
 
-## 4. Use the same SSH key as Windows (once)
+## 4. SSH key (once)
 
-Skip this if you set up the card with `make new-pi` in WSL: that puts your WSL key
-(`~/.ssh/id_ed25519.pub` in Ubuntu) on the Pi, and offers to create one if you have
-none. Only cards written with `configure-boot.ps1` need the step below.
+`make new-pi` puts your WSL key (`~/.ssh/id_ed25519.pub` in Ubuntu) on the Pi, and
+offers to create one if you have none, so usually there's nothing to do here.
 
-`configure-boot.ps1` put your **Windows** key (`C:\Users\<you>\.ssh\id_ed25519.pub`)
-on the Pi, so copy that key pair into WSL and give it the permissions SSH insists on.
-Replace `<you>` with your Windows username:
+To reuse a key you already have in Windows instead, copy the pair into WSL before
+running `make new-pi`, with the permissions SSH insists on. Replace `<you>` with your
+Windows username:
 
 ```bash
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
@@ -71,10 +70,6 @@ cp /mnt/c/Users/<you>/.ssh/id_ed25519 /mnt/c/Users/<you>/.ssh/id_ed25519.pub ~/.
 chmod 600 ~/.ssh/id_ed25519
 chmod 644 ~/.ssh/id_ed25519.pub
 ```
-
-If you don't have a Windows key yet, create one in Ubuntu with
-`ssh-keygen -t ed25519` instead and flash with it:
-`scripts\configure-boot.ps1 -SshPubKeyFile \\wsl.localhost\Ubuntu\home\<linux-user>\.ssh\id_ed25519.pub E:\`.
 
 ## 5. Run Ansible
 

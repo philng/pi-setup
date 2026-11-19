@@ -38,7 +38,7 @@ the SSD from scratch exactly like the card and re-run Ansible.
 
 1. **Flash the SSD** on your laptop exactly like the card: Raspberry Pi Imager
    (Pi OS Lite 64-bit, no customisation), then
-   `scripts/configure-boot.sh <its bootfs>` (or `configure-boot.ps1` on Windows).
+   `make new-pi` (or `scripts/configure-boot.sh <its bootfs>`; on Windows, in WSL).
 2. **Shut the Pi down**: `ssh admin@pilab.local sudo poweroff`.
 3. **Remove the SD card** and plug the SSD into a **blue USB 3 port**. Keep the
    dongles on the black USB 2 ports, ideally on a short extension cable: USB 3

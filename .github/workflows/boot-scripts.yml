@@ -1,6 +1,6 @@
 ---
 # Run the boot-partition scripts on every OS you might flash from.
-# macOS minutes bill at 10x and Windows at 2x on a private repo, so this runs
+# macOS minutes bill at 10x on a private repo, so this runs
 # only when the scripts or their templates change, or by hand.
 name: boot-scripts
 on:
@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -50,16 +50,9 @@ jobs:
           mkdir -p fakeboot2
           touch fakeboot2/config.txt fakeboot2/cmdline.txt
       - name: Run configure-boot.sh
-        if: runner.os != 'Windows'
         run: |
           SSH_PUBKEY_FILE=keys/id.pub scripts/configure-boot.sh fakeboot
           PI_HOSTNAME=octopi SSH_PUBKEY_FILE=keys/id.pub scripts/configure-boot.sh fakeboot2
-      - name: Run configure-boot.ps1 (Windows PowerShell 5.1)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          scripts\configure-boot.ps1 -Boot fakeboot -SshPubKeyFile keys\id.pub
-          scripts\configure-boot.ps1 -Boot fakeboot2 -SshPubKeyFile keys\id.pub -Hostname octopi
       - name: Check output
         shell: bash
         run: |

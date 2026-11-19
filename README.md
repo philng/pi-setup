@@ -13,7 +13,7 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 | --- | --- |
 | `bootstrap/` | First-boot settings (cloud-init) written onto the boot partition when flashing |
 | `scripts/new-pi.sh` (`make new-pi`) | Guided setup for a new or re-flashed Pi: asks its role and name, adds it to the inventory, writes the card, waits for first boot |
-| `scripts/configure-boot.sh` / `.ps1` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows |
+| `scripts/configure-boot.sh` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows (in WSL) |
 | `ansible/` | Everything after first boot: one role per service, applied with `make apply` (one Pi: `make apply LIMIT=octopi`) |
 | `docs/` | Step-by-step guides |
 | `molecule/`, `ansible/roles/*/molecule/` | Role tests in an arm64 Debian container (`make molecule ROLE=<role>`, and in CI) |
@@ -27,7 +27,7 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 
 ```bash
 scripts/configure-boot.sh /run/media/$USER/bootfs   # first-boot settings (macOS: /Volumes/bootfs,
-                                                     # Windows: scripts\configure-boot.ps1 E:\)
+                                                     # Windows: /mnt/e in WSL)
 make deps                                            # once: Ansible collections
 make ping && make apply                              # after the Pi boots
 ```
@@ -38,7 +38,7 @@ never on the Pi: Ansible connects to the Pis over SSH. On Windows, follow
 
 See [docs/01-base-image.md](docs/01-base-image.md) for the details. Each Pi has its own
 hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
-`PI_HOSTNAME=octopi scripts/configure-boot.sh ...` (Windows: `-Hostname octopi`).
+`PI_HOSTNAME=octopi scripts/configure-boot.sh ...`, or by answering `printer` in `make new-pi`.
 
 | Host | Inventory group | Roles |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ Podman's Docker-compatible socket once with `systemctl --user enable --now podma
 container runs on your PC's CPU (x86_64), CI runs it on arm64.
 
 CI runs lint on every PR and push to main, Molecule on PRs only (just the roles
-the PR changes), and the boot-script checks on Linux, macOS and Windows only when
+the PR changes), and the boot-script checks on Linux and macOS only when
 `scripts/configure-boot.*` or `bootstrap/` change. Docs-only changes and draft PRs
 skip CI; mark a PR ready for review to run it. Every workflow can also be run by
 hand from the Actions tab.
