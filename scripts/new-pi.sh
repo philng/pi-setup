@@ -401,7 +401,7 @@ try_windows_drive() {
 
 if [[ -n $BOOT ]]; then
   if [[ $BOOT =~ ^[A-Za-z]:[\\/]?$ ]]; then
-    is_wsl || die "drive letters like $BOOT only work in WSL; on Windows without WSL use scripts\\configure-boot.ps1"
+    is_wsl || die "drive letters like $BOOT only work in WSL (on Windows, run this inside WSL: docs/windows.md)"
     BOOT=$(wsl_mount "$BOOT") || die "couldn't mount $BOOT"
   fi
 else

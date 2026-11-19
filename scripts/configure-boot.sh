@@ -6,7 +6,9 @@
 #   PI_HOSTNAME=octopi scripts/configure-boot.sh ...    # a different Pi
 #
 # `make new-pi` asks the questions and runs this for you.
-# (Windows: use configure-boot.ps1.) Works with macOS's bash 3.2.
+#   scripts/configure-boot.sh /mnt/e                    # Windows, inside WSL
+#
+# Works with macOS's bash 3.2.
 #
 # Flash the card/SSD with Raspberry Pi Imager first (no customisation needed),
 # then run this against the mounted "bootfs" partition. It only writes a few

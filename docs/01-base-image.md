@@ -12,11 +12,11 @@ After that, Ansible does the rest.
   computer you flash from: Linux (`flatpak install flathub org.raspberrypi.rpi-imager`),
   macOS or Windows
 - This repo checked out on that computer
-- An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519`; this
-  works the same in a Windows terminal)
+- An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519`, or let
+  `make new-pi` create one; on Windows, in WSL)
 - To run Ansible afterwards: Linux or macOS with `ansible-core` (`pipx install
-  ansible-core`, `brew install ansible`, or a toolbox on Fedora Atomic). Ansible
-  doesn't run natively on Windows, so use WSL there: see [Windows (WSL)](windows.md).
+  ansible-core`, `brew install ansible`, or a toolbox on Fedora Atomic). On Windows,
+  everything except Imager runs in WSL: set that up first with [Windows (WSL)](windows.md).
   All `make` commands run on this computer, never on the Pi.
 
 ## The quick way: `make new-pi`
@@ -91,10 +91,12 @@ labelled `bootfs`, then run the script for your OS from the repo folder:
 scripts/configure-boot.sh /Volumes/bootfs
 ```
 
-**Windows** (shows up as a drive letter, for example `E:`; check in File Explorer):
+**Windows, in WSL.** The card shows up as a drive letter in File Explorer, for
+example `E:`. Mount it in WSL, then run the script there:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\configure-boot.ps1 E:\
+```bash
+sudo mkdir -p /mnt/e && sudo mount -t drvfs E: /mnt/e -o uid=$(id -u),gid=$(id -g)
+scripts/configure-boot.sh /mnt/e
 ```
 
 **Linux / Fedora Sway Atomic.** Find the partition with
@@ -111,7 +113,7 @@ root filesystem, which Windows can't read.
 
 This only writes `user-data`, `network-config` and `meta-data` into that folder.
 It checks the folder really is a Pi boot partition first, keeps Imager's original
-files as `*.orig`, and needs no sudo or admin rights. Raspberry Pi OS (Trixie and later) reads these
+files as `*.orig`, and needs no sudo or admin rights (apart from the WSL mount). Raspberry Pi OS (Trixie and later) reads these
 files with cloud-init on first boot to set the hostname, create your user with your
 SSH key, disable password login and turn on SSH.
 

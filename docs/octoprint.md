@@ -14,16 +14,13 @@ need those, flash OctoPi instead and leave this host out of the inventory.
 
 ## 1. Flash and first boot
 
-Same as [01-base-image.md](01-base-image.md), with the hostname set to `octopi`
-when you add the first-boot settings:
+Same as [01-base-image.md](01-base-image.md): run `make new-pi` and answer `printer`
+(hostname `octopi`). By hand, set the hostname when you add the first-boot settings:
 
 ```bash
 PI_HOSTNAME=octopi scripts/configure-boot.sh /run/media/$USER/bootfs   # Linux
 PI_HOSTNAME=octopi scripts/configure-boot.sh /Volumes/bootfs           # macOS
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\configure-boot.ps1 -Hostname octopi E:\
+PI_HOSTNAME=octopi scripts/configure-boot.sh /mnt/e                    # Windows, in WSL
 ```
 
 Boot it on Ethernet, then check it answers: `make ping LIMIT=octopi`.
