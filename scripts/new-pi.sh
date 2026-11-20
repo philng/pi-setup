@@ -210,12 +210,12 @@ next_steps() {
   local user=$1 addr=$2
   step "Next: configure it with Ansible"
   say "These run here on your computer too; Ansible connects to the Pi over SSH."
-  say "  make ping LIMIT=$HOST       # installs the pinned Ansible into .venv the first time"
+  say "  make ping LIMIT=$HOST       # installs the pinned Ansible the first time"
   say "  make apply LIMIT=$HOST"
   say "Log in by hand any time with: ssh $user@$addr"
-  if ! command -v uv >/dev/null && ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 13))' 2>/dev/null; then
-    say "(First install uv, which installs Ansible and the Python it needs:"
-    say "   curl -LsSf https://astral.sh/uv/install.sh | sh    or on macOS: brew install uv)"
+  if ! command -v mise >/dev/null; then
+    say "(First install mise, which sets up the Python and uv that install Ansible:"
+    say "   curl https://mise.run | sh    or on macOS: brew install mise)"
   elif [[ $YES -eq 0 ]] && confirm "Run them now?" Y; then
     cd "$REPO_ROOT"
     make --no-print-directory ping LIMIT="$HOST"

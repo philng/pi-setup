@@ -32,13 +32,13 @@ window.
 ```bash
 sudo apt update
 sudo apt install -y git make curl openssh-client
-curl -LsSf https://astral.sh/uv/install.sh | sh
+curl https://mise.run | sh
 ```
 
-Close and reopen the Ubuntu window so `uv` is on your `PATH`. That's all: you don't
-install Ansible yourself. The first `make` that needs it installs the version the repo
-pins into `~/pi-setup/.venv` (with uv fetching the Python it needs), the same one
-used on every other computer and in CI.
+Close and reopen the Ubuntu window so `mise` is on your `PATH`. That's all: you don't
+install Python or Ansible yourself. The first `make` that needs them installs the
+versions the repo pins (Python with mise, Ansible into `~/pi-setup/.venv`), the same
+ones used on every other computer and in CI.
 
 ## 3. Get the repo inside WSL (once)
 

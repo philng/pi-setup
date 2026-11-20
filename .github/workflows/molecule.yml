@@ -51,14 +51,19 @@ jobs:
       # Build the test image while Python and collections install.
       - name: Start building the Molecule test image
         run: (make molecule-image > "$RUNNER_TEMP/image.log" 2>&1; echo $? > "$RUNNER_TEMP/image.rc") &
-      # The same pinned tools as `make deps-dev` locally (requirements-dev.txt).
-      - uses: actions/setup-python@v5
+      # The same tools as `make deps-dev` locally: Python and uv from mise.toml,
+      # Python packages from requirements-dev.txt.
+      - uses: jdx/mise-action@v3
+        env:
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
         with:
-          python-version-file: .python-version
-      - uses: astral-sh/setup-uv@v6
+          version: 2026.11.10
+          cache: true
+      - name: Cache uv downloads
+        uses: actions/cache@v4
         with:
-          enable-cache: true
-          cache-dependency-glob: requirements*.txt
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements*.txt') }}
       # Refreshed weekly, so new collection releases still get tested.
       - id: week
         run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"

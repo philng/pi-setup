@@ -14,7 +14,7 @@ After that, Ansible does the rest.
 - This repo checked out on that computer
 - An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519`, or let
   `make new-pi` create one; on Windows, in WSL)
-- To run Ansible afterwards: `git`, `make` and [uv](https://docs.astral.sh/uv/) on
+- To run Ansible afterwards: `git`, `make` and [mise](https://mise.jdx.dev) on
   Linux or macOS (see [Tools on your computer](../README.md#tools-on-your-computer));
   `make` installs the pinned Ansible into the repo's `.venv/` itself. On Windows,
   everything except Imager runs in WSL: set that up first with [Windows (WSL)](windows.md).

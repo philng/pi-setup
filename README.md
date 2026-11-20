@@ -37,26 +37,28 @@ never on the Pi: Ansible connects to the Pis over SSH. On Windows, follow
 
 ### Tools on your computer
 
-You need `git`, `make` and [uv](https://docs.astral.sh/uv/). Nothing else is
-installed globally: the first `make` target that needs Ansible creates `.venv/` in the
-repo with the exact versions pinned in `requirements.txt` (and the Ansible collections
-in `ansible/.collections/`), so your laptop, WSL and CI all run the same Ansible. You
-never activate it; `make` uses it. Run `make deps` to set it up ahead of time.
+You need `git`, `make` and [mise](https://mise.jdx.dev). Nothing else is installed
+globally. The first `make` target that needs Ansible runs `mise install`, which gets
+the Python and uv versions pinned in `mise.toml`. It then creates `.venv/` in the repo
+with the exact Ansible versions locked in `requirements.txt`, plus the Ansible
+collections in `ansible/.collections/`. Your laptop, WSL and CI all run the same
+versions. `make` uses them without you activating anything. Run `make deps` to set
+everything up ahead of time.
 
 | Computer | Install once |
 | --- | --- |
-| Fedora Atomic (Silverblue, Sway Atomic, ...) | `git` and `make` are on the host. `curl -LsSf https://astral.sh/uv/install.sh \| sh` installs uv to `~/.local/bin`, no layering or toolbox needed. Run `make` on the host, not in a toolbox, so the Molecule tests can reach Podman |
-| Other Linux | `git`, `make` and `curl` from your package manager, then the uv line above |
-| macOS | `xcode-select --install` (git, make), then `brew install uv` or the uv line above |
+| Fedora Atomic (Silverblue, Sway Atomic, ...) | `git` and `make` are on the host. `curl https://mise.run \| sh` installs mise to `~/.local/bin`, so you don't need layering or a toolbox. Run `make` on the host, not in a toolbox, so the Molecule tests can reach Podman |
+| Other Linux | `git`, `make` and `curl` from your package manager, then the mise line above |
+| macOS | `xcode-select --install` (git, make), then `brew install mise` |
 | Windows | In WSL: see [docs/windows.md](docs/windows.md) |
 
-uv also fetches the Python version in `.python-version` if your system's is older
-(macOS ships 3.9, Ubuntu 24.04 has 3.12). Without uv, `make` falls back to
-`python3 -m venv`, which needs Python 3.13 or newer.
+Optional: [activate mise in your shell](https://mise.jdx.dev/getting-started.html#activate-mise)
+and run `mise trust` once in the repo. After that, `cd`-ing into the repo activates
+`.venv`, so `ansible`, `ansible-lint` and `molecule` work directly too.
 
 To move to a newer Ansible, edit the version in `requirements.in` (or the dev tools in
-`requirements-dev.in`), run `make lock`, and commit both files. Everyone's next `make`
-updates their `.venv`.
+`requirements-dev.in`), run `make lock`, and commit both files. For Python or uv, edit
+`mise.toml`. Everyone's next `make` picks up the change.
 
 See [docs/01-base-image.md](docs/01-base-image.md) for the details. Each Pi has its own
 hostname: `pilab` is the default, and the OctoPrint Pi is flashed with

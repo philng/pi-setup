@@ -7,21 +7,20 @@ export ANSIBLE_CONFIG := $(CURDIR)/$(ANSIBLE_DIR)/ansible.cfg
 
 .PHONY: help new-pi wait-pi deps deps-dev lock ping apply check health lint hooks test octoprint-backup molecule-image molecule
 
-# Ansible (and, for development, ansible-lint and Molecule) live in .venv, at the
-# exact versions in requirements.txt / requirements-dev.txt, so every computer and
-# CI run the same ones. Targets that need them create or update .venv first, and
-# use it without you activating anything. With uv (recommended) .venv gets the
-# Python in .python-version, downloaded if needed; without it, python3 -m venv.
+# Tools come from mise and .venv, so every computer and CI run the same versions:
+# mise installs the Python and uv pinned in mise.toml, and uv installs Ansible
+# (and, for development, ansible-lint and Molecule) into .venv at the exact
+# versions in requirements.txt / requirements-dev.txt. Targets that need them
+# create or update both first, and use them without you activating anything.
+MISE := $(shell command -v mise 2>/dev/null)
 VENV := $(CURDIR)/.venv
-UV := $(shell command -v uv 2>/dev/null)
-PYTHON_VERSION := $(shell cat .python-version)
+PYTHON_VERSION := $(shell sed -n 's/^python *= *"\([0-9.]*\)".*/\1/p' mise.toml)
+UV := mise exec -- uv
+PIP_INSTALL := $(UV) pip install --quiet --python $(VENV)/bin/python
 export VIRTUAL_ENV := $(VENV)
 export PATH := $(VENV)/bin:$(PATH)
-ifneq ($(UV),)
-PIP_INSTALL := uv pip install --quiet --python $(VENV)/bin/python
-else
-PIP_INSTALL := $(VENV)/bin/python -m pip install --quiet --disable-pip-version-check
-endif
+# Trust this repo's mise.toml for commands run by make, without a prompt.
+export MISE_TRUSTED_CONFIG_PATHS := $(CURDIR)
 # Collections are installed again only when ansible/requirements.yml changes
 # (by content, so a restored CI cache counts as installed).
 COLLECTIONS := $(ANSIBLE_DIR)/.collections/.installed-$(word 1,$(shell cksum < $(ANSIBLE_DIR)/requirements.yml))
@@ -53,21 +52,19 @@ deps: $(VENV)/.deps $(COLLECTIONS) ## Install the pinned Ansible into .venv, and
 
 deps-dev: deps $(VENV)/.deps-dev $(COLLECTIONS)-dev ## Also install ansible-lint, yamllint and Molecule (make lint/test)
 
-lock: ## After editing requirements*.in: pin exact versions in requirements*.txt (needs uv)
-	uv pip compile --quiet --universal --python-version $(PYTHON_VERSION) $(LOCK_ARGS) requirements.in -o requirements.txt
-	uv pip compile --quiet --universal --python-version $(PYTHON_VERSION) $(LOCK_ARGS) requirements.in requirements-dev.in -o requirements-dev.txt
+lock: ## After editing requirements*.in: pin exact versions in requirements*.txt
+	$(UV) pip compile --quiet --universal --python-version $(PYTHON_VERSION) $(LOCK_ARGS) requirements.in -o requirements.txt
+	$(UV) pip compile --quiet --universal --python-version $(PYTHON_VERSION) $(LOCK_ARGS) requirements.in requirements-dev.in -o requirements-dev.txt
 
-# A new .python-version recreates .venv.
-$(VENV)/pyvenv.cfg: .python-version
-	@rm -rf $(VENV)
-ifneq ($(UV),)
-	uv venv --quiet --python $(PYTHON_VERSION) $(VENV)
-else
-	@python3 -c 'import sys; sys.exit(sys.version_info < tuple(map(int, "$(PYTHON_VERSION)".split("."))))' 2>/dev/null || { \
-	  echo "Need uv, or python3 $(PYTHON_VERSION) or newer, to install Ansible. Install uv:"; \
-	  echo "  curl -LsSf https://astral.sh/uv/install.sh | sh    (macOS: brew install uv)"; exit 1; }
-	python3 -m venv $(VENV)
+# A change to mise.toml reinstalls the tools and recreates .venv.
+$(VENV)/pyvenv.cfg: mise.toml
+ifeq ($(MISE),)
+	@echo "Install mise first (https://mise.jdx.dev), then run make again:"
+	@echo "  curl https://mise.run | sh        (macOS: brew install mise)"
+	@exit 1
 endif
+	mise install --yes
+	$(UV) venv --quiet --clear --python "$$(mise which python)" $(VENV)
 
 $(VENV)/.deps: requirements.txt $(VENV)/pyvenv.cfg
 	$(PIP_INSTALL) -r requirements.txt

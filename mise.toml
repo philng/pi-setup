@@ -1,0 +1,11 @@
+# Tool versions for this repo, installed by `make deps` (which runs `mise install`).
+# Ansible itself isn't here: it's a Python package, pinned in requirements.txt and
+# installed into .venv by `make deps`.
+[tools]
+python = "3.13"   # ansible-core 2.22 needs 3.13 or newer
+uv = "0.11.32"
+
+[env]
+# With mise activated in your shell, cd-ing into the repo activates .venv, so
+# `ansible`, `ansible-lint`, `molecule` work directly. `make` doesn't need this.
+_.python.venv = { path = ".venv", create = true }
