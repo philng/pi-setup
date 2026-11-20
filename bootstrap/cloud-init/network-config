@@ -1,5 +1,5 @@
 # Wired Ethernet with DHCP. Give the Pi a DHCP reservation on your router so
-# its address never changes; it is also reachable as <hostname>.local (mDNS).
+# its address never changes. The repo reaches it by its plain hostname (router DNS).
 network:
   version: 2
   renderer: NetworkManager

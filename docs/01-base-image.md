@@ -46,7 +46,7 @@ It walks you through the rest and explains each step:
    find one, it asks for the path or drive letter. After a summary and a yes, it runs `configure-boot.sh` and
    offers to eject.
 5. **First boot.** Put the card in the Pi, plug in Ethernet and power, press Enter,
-   and it waits until `ssh admin@<name>.local` works, with a plain-English hint if
+   and it waits until `ssh admin@<name>` works, with a plain-English hint if
    it doesn't (not on the network yet, key refused, old host key). Then it prints
    the Ansible commands and offers to run them.
 
@@ -130,9 +130,24 @@ make deps   # once
 make ping   # expect: pilab | SUCCESS => "ping": "pong"
 ```
 
-If `pilab.local` doesn't resolve, find the Pi's IP on your router, set
-`ansible_host` to it in `ansible/inventory/hosts.yml`, and give the Pi a DHCP
-reservation so it never changes.
+### How your computer finds the Pis
+
+Everything here uses the plain hostnames `pilab` and `octopi`, which your router's
+DNS answers for its DHCP clients (most home routers do). `.local` (mDNS) names are
+not used: WSL usually can't resolve them, and anything on the LAN can answer for a
+`.local` name, which matters for the gaming PC's usbip connection.
+
+- **Give each Pi a DHCP reservation** on your router (its device or LAN settings,
+  usually "reserve IP" or "static lease" next to the Pi). The address then never
+  changes, so a Pi can't drop off the network after a lease renewal, and the name
+  keeps pointing at the right Pi.
+- **Check the name resolves:** `ping -c1 pilab`. If it doesn't, try `pilab.lan` or
+  `pilab.home` (some routers add a suffix; your computer adds it for you if it
+  uses the router's DNS).
+- **Fallback:** set `ansible_host` to the Pi's IP in `ansible/inventory/hosts.yml`,
+  for example `ansible_host: 192.168.1.50`, and pass the IP to
+  `client/linux/install.sh` on the gaming PC. With a reservation, the IP is as
+  stable as the name.
 
 `make apply` currently only checks the OS and architecture. The real
 configuration arrives with the roles in step 2.
@@ -142,6 +157,6 @@ configuration arrives with the roles in step 2.
 - **SSH asks for a password:** the key in `user-data` didn't match. Re-run
   `SSH_PUBKEY_FILE=/path/to/key.pub scripts/configure-boot.sh ...` and reboot from a fresh flash.
 - **Host key warning after re-flashing:** expected, every flash makes new host keys.
-  `ssh-keygen -R pilab.local`.
-- **Check what cloud-init did:** `ssh admin@pilab.local cloud-init status --long`
+  `ssh-keygen -R pilab`.
+- **Check what cloud-init did:** `ssh admin@pilab cloud-init status --long`
   and `sudo cat /var/log/cloud-init-output.log`.

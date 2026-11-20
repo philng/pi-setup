@@ -121,7 +121,7 @@ add_to_group() {  # add_to_group HOST GROUP: insert right after "hosts:" of GROU
     $0 ~ "^        " g ":[[:space:]]*$" { ing = 1; next }
     ing && /^          hosts:[[:space:]]*$/ {
       print "            " h ":"
-      print "              ansible_host: " h ".local"
+      print "              ansible_host: " h
       done = 1; ing = 0; next
     }
     /^        [^ ]/ { ing = 0 }
@@ -195,9 +195,10 @@ wait_for_pi() {
       echo
       say "${R}No SSH after $((WAIT_TIMEOUT / 60)) minutes.${N} Last error: $err"
       say "Check the Pi has power and Ethernet (green LED flickers on boot)."
-      if [[ $addr == *.local ]]; then
-        say "If $addr never resolves (common in WSL), find its IP on your router and set"
-        say "ansible_host for $HOST in ansible/inventory/hosts.yml, then: make wait-pi HOST=$HOST"
+      if [[ ! $addr =~ ^[0-9.]+$ && ! $addr == *:* ]]; then
+        say "If $addr never resolves, your router isn't giving out its DHCP clients' names."
+        say "Find the Pi's IP on your router's device list, give it a DHCP reservation, set"
+        say "ansible_host for $HOST to that IP in ansible/inventory/hosts.yml, then: make wait-pi HOST=$HOST"
       fi
       return 1
     fi
@@ -231,7 +232,7 @@ USER_NAME=$(login_user)
 if [[ $WAIT_ONLY -eq 1 ]]; then
   [[ -n $HOST ]] || die "--wait needs --hostname (make wait-pi HOST=octopi)"
   [[ -n $(group_of "$HOST") ]] || die "$HOST is not in $INVENTORY"
-  ADDR=$(ansible_host_of "$HOST"); ADDR=${ADDR:-$HOST.local}
+  ADDR=$(ansible_host_of "$HOST"); ADDR=${ADDR:-$HOST}
   wait_for_pi "$USER_NAME" "$ADDR" || exit 1
   next_steps "$USER_NAME" "$ADDR"
   exit 0
@@ -258,7 +259,7 @@ ok "role: $ROLE (inventory group: $GROUP)"
 
 # --- 2. Hostname ------------------------------------------------------------
 step "2. Hostname"
-say "The Pi's name on your network: you'll reach it as <name>.local."
+say "The Pi's name on your network: you'll reach it as <name>, through your router's DNS."
 while :; do
   [[ -n $HOST ]] || ask HOST "Hostname" "$DEFAULT_HOST"
   if ! valid_hostname "$HOST"; then
@@ -318,7 +319,7 @@ case $(basename "$KEY") in
   id_ed25519.pub | id_rsa.pub | id_ecdsa.pub | id_ecdsa_sk.pub | id_ed25519_sk.pub) ;;
   *)
     warn "SSH and Ansible only try ~/.ssh/id_* by default. Add this to ~/.ssh/config:"
-    printf '  Host %s.local\n    IdentityFile %s\n' "$HOST" "${KEY%.pub}" >&2 ;;
+    printf '  Host %s\n    IdentityFile %s\n' "$HOST" "${KEY%.pub}" >&2 ;;
 esac
 
 # --- 4. Inventory -----------------------------------------------------------
@@ -330,10 +331,10 @@ if [[ -z $CURRENT ]]; then
     die "couldn't find group '$GROUP' in $INVENTORY. Add this under it by hand:
           hosts:
             $HOST:
-              ansible_host: $HOST.local"
+              ansible_host: $HOST"
   fi
 fi
-ADDR=$(ansible_host_of "$HOST"); ADDR=${ADDR:-$HOST.local}
+ADDR=$(ansible_host_of "$HOST"); ADDR=${ADDR:-$HOST}
 
 if [[ $NO_BOOT -eq 1 ]]; then
   say

@@ -100,11 +100,11 @@ What CI can't prove, because it needs your hardware:
 
 1. `make check` shows what would change, then `make apply`. Run `make apply`
    a second time: it should report `changed=0`.
-2. `ssh admin@pilab.local sudo reboot` (applies the bootloader setting), then
+2. `ssh admin@pilab sudo reboot` (applies the bootloader setting), then
    `make ping` works again.
 3. Plug in each dongle. On the Pi: `usbip list -l` shows it, and
    `journalctl -u 'usbip-bind@*'` shows it was exported.
-4. From the gaming PC: `usbip list -r pilab.local` lists the dongles (step 3
+4. From the gaming PC: `usbip list -r pilab` lists the dongles (step 3
    sets up attaching them automatically).
 5. Plug a USB stick into the Pi: it must **not** show up in `usbip list -r`.
 6. From a device outside your LAN (e.g. phone on mobile data via a VPN that

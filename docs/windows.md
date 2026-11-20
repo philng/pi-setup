@@ -84,19 +84,15 @@ make apply LIMIT=octopi     # or just one
 
 The first connection to each Pi asks you to confirm its host key; type `yes`.
 
-## If `pilab.local` / `octopi.local` doesn't resolve
+## If `pilab` / `octopi` doesn't resolve
 
-WSL often can't look up `.local` names, even when Windows can. `make ping` then
-fails with `Could not resolve hostname`. Find each Pi's IP address, either on your
-router's device list or in PowerShell with:
-
-```powershell
-Resolve-DnsName pilab.local -Type A
-```
-
-Then, in `ansible/inventory/hosts.yml`, replace `pilab.local` (and `octopi.local`)
-after `ansible_host:` with the IP, for example `ansible_host: 192.168.1.50`. Give each
-Pi a DHCP reservation on your router so the address never changes.
+The repo uses plain hostnames, which WSL looks up through Windows and your router,
+so `make ping` normally just works. `.local` names usually don't resolve in WSL,
+which is why the repo doesn't use them. If `make ping` fails with
+`Could not resolve hostname`, find each Pi's IP address on your router's device
+list, then in `ansible/inventory/hosts.yml` replace `pilab` (and `octopi`) after
+`ansible_host:` with the IP, for example `ansible_host: 192.168.1.50`. Either way,
+give each Pi a DHCP reservation on your router so the address never changes.
 
 On Windows 11 you can instead try WSL's mirrored networking, which shares Windows'
 network setup: create `C:\Users\<you>\.wslconfig` containing

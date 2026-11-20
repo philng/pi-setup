@@ -30,7 +30,7 @@ Boot it on Ethernet, then check it answers: `make ping LIMIT=octopi`.
 Use one of the Pi 4's black (USB 2) ports and a short cable. Then:
 
 ```bash
-ssh admin@octopi.local ls -l /dev/serial/by-id/ /dev/v4l/by-id/
+ssh admin@octopi ls -l /dev/serial/by-id/ /dev/v4l/by-id/
 ```
 
 Put what you find in `ansible/inventory/host_vars/octopi.yml` (create it):
@@ -63,7 +63,7 @@ OctoPrint sees the printer as `/dev/ttyACM0`, so its auto-detect finds it.
 make apply LIMIT=octopi
 ```
 
-Then open <http://octopi.local>, log in (see [Login](#login) below) and run
+Then open <http://octopi>, log in (see [Login](#login) below) and run
 OctoPrint's setup wizard once (printer profile, etc.). The first start pulls
 the image, which can take a few minutes on a Pi. For the MK3S+, the serial baud rate is 115200
 (leave it on AUTO or pick it), and the print bed is 250 x 210 x 210 mm.
@@ -123,7 +123,7 @@ OctoEverywhere gives you remote access (no port forwarding), phone apps,
 notifications and **Gadget**, its AI print-failure detection. The role
 installs it; linking it to your account is a one-time step only you can do:
 
-1. Open <http://octopi.local> after `make apply`. OctoEverywhere's setup
+1. Open <http://octopi> after `make apply`. OctoEverywhere's setup
    wizard pops up (or open Settings > OctoEverywhere).
 2. Click its link to octoeverywhere.com, sign in or create a free account,
    and confirm the printer.
@@ -179,7 +179,7 @@ find the focus value that makes the bed sharp, try a few live while watching
 the stream, then put the best one in `host_vars/octopi.yml`:
 
 ```bash
-ssh admin@octopi.local
+ssh admin@octopi
 cam=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_XXXXXXXX-video-index0
 v4l2-ctl -d $cam -l | grep -i focus               # names and ranges
 v4l2-ctl -d $cam --set-ctrl=focus_automatic_continuous=0
@@ -223,14 +223,14 @@ admin through the setup wizard. These are the things only the real printer
 can prove:
 
 - [ ] `make check LIMIT=octopi` shows no changes right after `make apply`
-- [ ] <http://octopi.local> loads after a reboot of the Pi (linger works)
+- [ ] <http://octopi> loads after a reboot of the Pi (linger works)
 - [ ] OctoPrint's Connection panel lists `/dev/ttyACM0`, and **Connect** gets the
       printer's firmware info in the Terminal tab (serial access works)
 - [ ] Turn the printer off and on: within a minute OctoPrint restarts and can
       connect again (`sudo journalctl -u octoprint-replug -n 5` shows it ran)
 - [ ] Unplug and replug the USB cable while idle: same result
 - [ ] If you have a webcam: the Control tab shows the stream
-- [ ] Webcam snapshot works: <http://octopi.local/webcam/?action=snapshot>
+- [ ] Webcam snapshot works: <http://octopi/webcam/?action=snapshot>
       shows a still
 - [ ] Focus is locked: `v4l2-ctl -d <camera> -C focus_automatic_continuous`
       prints 0 after a reboot, and the stream doesn't refocus when you wave a
@@ -239,7 +239,7 @@ can prove:
       as online on octoeverywhere.com with a live webcam preview
 - [ ] Gadget: start a print and check octoeverywhere.com shows Gadget
       watching it (the printer page shows its status and last check)
-- [ ] Login is required: <http://octopi.local> in a private browser window
+- [ ] Login is required: <http://octopi> in a private browser window
       shows the login page, and the password in
       `secrets/octoprint-admin-octopi` (or your own user's) works
 - [ ] Settings > Firmware Updater shows the `Prusa MK3S+` profile (avrdude,

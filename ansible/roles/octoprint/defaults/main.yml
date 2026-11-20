@@ -5,7 +5,7 @@ octoprint_image: docker.io/octoprint/octoprint:latest
 
 # Host port for the web UI. The container listens on 80 (haproxy in front of
 # OctoPrint and the webcam stream). Below 1024 the role lets rootless
-# containers bind it, so http://octopi.local works without a port.
+# containers bind it, so http://octopi works without a port.
 octoprint_port: 80
 
 # OctoPrint config, plugins, uploads and timelapses. Mounted at /octoprint.
