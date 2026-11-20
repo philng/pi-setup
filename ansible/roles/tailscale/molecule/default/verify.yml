@@ -4,17 +4,21 @@
   become: true
   gather_facts: false
   tasks:
-    - name: Read the installed package's source
-      ansible.builtin.command: apt-cache policy tailscale
+    - name: Read the package's state and the repositories' origins
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - apt-cache policy tailscale
+        - apt-cache policy
       register: tailscale_verify_policy
       changed_when: false
 
-    - name: Tailscale is installed from Tailscale's repo (which unattended-upgrades knows by this origin)
+    - name: Tailscale is installed from Tailscale's repo, whose origin is the one unattended-upgrades allows
       ansible.builtin.assert:
         that:
-          - "'Installed: (none)' not in tailscale_verify_policy.stdout"
-          - "'o=Tailscale' in tailscale_verify_policy.stdout"
-        fail_msg: "{{ tailscale_verify_policy.stdout }}"
+          - "'Installed: (none)' not in tailscale_verify_policy.results[0].stdout"
+          - "'pkgs.tailscale.com' in tailscale_verify_policy.results[0].stdout"
+          - "'o=Tailscale' in tailscale_verify_policy.results[1].stdout"
+        fail_msg: "{{ tailscale_verify_policy.results | map(attribute='stdout') | list }}"
 
     - name: Unattended-upgrades accepts the config and includes Tailscale
       ansible.builtin.command: unattended-upgrade --dry-run --debug
@@ -22,7 +26,7 @@
       changed_when: false
       failed_when: >-
         tailscale_verify_uu.rc != 0
-        or 'o=Tailscale' not in tailscale_verify_uu.stdout + tailscale_verify_uu.stderr
+        or 'origin=Tailscale' not in tailscale_verify_uu.stdout + tailscale_verify_uu.stderr
 
     # apt already proved this key signs the repo; this proves it is the key
     # Tailscale publishes (fingerprint from Tailscale's own install script).
