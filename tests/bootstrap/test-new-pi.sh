@@ -36,9 +36,9 @@ user_data() { python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); 
 # 1. Non-interactive: a new printer Pi joins `printers` and the card gets its settings.
 setup
 if run --yes --role printer --hostname printer2 --boot "$WORK/boot" >"$WORK/out" 2>&1 \
-  && [[ $(group_of printer2) == "printers printer2.local" ]] \
+  && [[ $(group_of printer2) == "printers printer2" ]] \
   && [[ $(user_data) == "printer2 admin" ]] \
-  && [[ $(group_of octopi) == "printers octopi.local" && $(group_of pilab) == "usbip pilab.local" ]]; then
+  && [[ $(group_of octopi) == "printers octopi" && $(group_of pilab) == "usbip pilab" ]]; then
   pass "non-interactive new printer"
 else fail "non-interactive new printer"; cat "$WORK/out"; fi
 
@@ -70,7 +70,7 @@ else fail "invalid hostname refused"; cat "$WORK/out"; fi
 setup
 printf '1\nusbip2\n\n%s\ny\nn\n' "$WORK/boot" > "$WORK/answers"
 if run --no-wait <"$WORK/answers" >"$WORK/out" 2>&1 \
-  && [[ $(group_of usbip2) == "usbip usbip2.local" ]] && [[ $(user_data) == "usbip2 admin" ]]; then
+  && [[ $(group_of usbip2) == "usbip usbip2" ]] && [[ $(user_data) == "usbip2 admin" ]]; then
   pass "interactive answers"
 else fail "interactive answers"; cat "$WORK/out"; fi
 
@@ -104,14 +104,14 @@ EOF
 chmod +x "$WORK/bin/ssh"
 rm -f "$WORK/ssh-count"
 if NEW_PI_WAIT_INTERVAL=0 run --wait --hostname octopi --yes >"$WORK/out" 2>&1 \
-  && grep -q "admin@octopi.local" "$WORK/ssh-args" && grep -q "make apply LIMIT=octopi" "$WORK/out"; then
+  && grep -q "admin@octopi" "$WORK/ssh-args" && grep -q "make apply LIMIT=octopi" "$WORK/out"; then
   pass "wait for SSH"
 else fail "wait for SSH"; cat "$WORK/out"; fi
 
 # 9. --wait gives up with a clear message when the key is refused.
 cat > "$WORK/bin/ssh" <<'EOF'
 #!/usr/bin/env bash
-echo "admin@octopi.local: Permission denied (publickey)." >&2; exit 255
+echo "admin@octopi: Permission denied (publickey)." >&2; exit 255
 EOF
 if ! NEW_PI_WAIT_INTERVAL=0 NEW_PI_WAIT_TIMEOUT=0 run --wait --hostname octopi --yes >"$WORK/out" 2>&1 \
   && grep -q "No SSH after" "$WORK/out"; then

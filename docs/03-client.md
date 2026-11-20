@@ -14,9 +14,14 @@ picture; the controllers never go through the Apple TV.
 From this repo on the gaming PC:
 
 ```bash
-sudo client/linux/install.sh            # uses pilab.local
+sudo client/linux/install.sh            # uses pilab
 # or: sudo client/linux/install.sh 192.168.1.50
 ```
+
+`pilab` is resolved by your router's DNS; see
+[How your computer finds the Pis](01-base-image.md#how-your-computer-finds-the-pis).
+Installed before the switch from `pilab.local`? Run the script again, or set
+`SERVER=pilab` in `/etc/usbip-autoattach.conf` and restart the service.
 
 On Fedora Atomic the first run layers `usbip` (and `kernel-modules-extra` if
 the `vhci-hcd` module is missing) with rpm-ostree and asks you to reboot.
@@ -33,7 +38,7 @@ the `vhci-hcd` module is missing) with rpm-ostree and asks you to reboot.
 Check it:
 
 ```bash
-systemctl status usbip-autoattach   # running, "attached pilab.local:1-1.3" in the log
+systemctl status usbip-autoattach   # running, "attached pilab:1-1.3" in the log
 usbip port                          # the attached dongles
 ```
 
@@ -55,7 +60,7 @@ on the Pi; you don't need its server installer.
 Or script it, e.g. from a Sunshine "do" command or a scheduled task at logon:
 
 ```powershell
-USBAnywhere.exe --minimized --connect pilab.local 1-1.3
+USBAnywhere.exe --minimized --connect pilab 1-1.3
 ```
 
 Only one machine can hold a dongle at a time. If Linux still has it (say, the

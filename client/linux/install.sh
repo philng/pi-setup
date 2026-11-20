@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Set up this Linux PC to auto-attach the Pi's USB dongles over USB/IP.
 #
-#   sudo client/linux/install.sh                 # SERVER=pilab.local
+#   sudo client/linux/install.sh                 # SERVER=pilab
 #   sudo client/linux/install.sh 192.168.1.50    # or the Pi's address
 #   sudo client/linux/install.sh --uninstall
 #
@@ -25,7 +25,7 @@ if [[ ${1:-} == --uninstall ]]; then
   say "Removed. Kept /etc/usbip-autoattach.conf and any layered packages."
   exit 0
 fi
-SERVER=${1:-pilab.local}
+SERVER=${1:-pilab}
 
 # --- Packages ---------------------------------------------------------------
 need_pkgs=()

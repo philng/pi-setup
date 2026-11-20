@@ -25,7 +25,7 @@ table inet pilab {
     iif "lo" accept
     meta l4proto { icmp, ipv6-icmp } accept
 
-    # mDNS (pilab.local) and DHCPv6 client
+    # mDNS (avahi; handy for finding a fresh Pi, the repo uses plain names) and DHCPv6 client
     udp dport 5353 accept
     ip6 saddr fe80::/10 udp dport 546 accept
 
