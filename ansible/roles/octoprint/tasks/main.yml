@@ -1,16 +1,4 @@
 ---
-# The udev rule for webcam controls matches the camera by the serial number
-# in its /dev/v4l/by-id/ name, so that is the only kind of path it supports.
-- name: Check the webcam path works with webcam controls
-  ansible.builtin.assert:
-    that: octoprint_webcam_device | basename is match('^usb-.+-video-index[0-9]+$')
-    fail_msg: >-
-      octoprint_webcam_controls needs octoprint_webcam_device set to a path
-      from ls /dev/v4l/by-id/, like
-      /dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_XXXX-video-index0
-    quiet: true
-  when: octoprint_webcam_controls | length > 0
-
 - name: Install v4l2-ctl for webcam controls
   ansible.builtin.apt:
     name: v4l-utils
@@ -90,29 +78,79 @@
     - Podman user daemon-reload
     - Restart octoprint
 
-# Quadlet only passes a device through if it exists when the unit is
-# generated, and a running container never sees devices plugged in later.
-# So when a printer or webcam appears (powered on, replugged), regenerate
-# the unit and restart OctoPrint if it is running.
+# The printer and webcam go into a Quadlet drop-in, written by
+# octoprint-devices: now, and again whenever a USB serial port or camera
+# appears (udev starts octoprint-replug@tty or @video). Quadlet only passes a
+# device that exists when the unit is generated, and a running container
+# never sees devices plugged in later, so the script also regenerates the
+# unit and restarts OctoPrint then.
+- name: Install the device detection script
+  ansible.builtin.copy:
+    src: octoprint-devices
+    dest: /usr/local/sbin/octoprint-devices
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure device detection
+  ansible.builtin.template:
+    src: octoprint-devices.j2
+    dest: /etc/default/octoprint-devices
+    owner: root
+    group: root
+    mode: "0644"
+
+# Before this role found devices by itself it had one non-template unit.
+- name: Remove the old replug service
+  ansible.builtin.file:
+    path: /etc/systemd/system/octoprint-replug.service
+    state: absent
+  notify: Reload systemd
+
 - name: Install the replug service
   ansible.builtin.template:
-    src: octoprint-replug.service.j2
-    dest: /etc/systemd/system/octoprint-replug.service
+    src: octoprint-replug@.service.j2
+    dest: /etc/systemd/system/octoprint-replug@.service
     owner: root
     group: root
     mode: "0644"
   notify: Reload systemd
 
-- name: Install the udev rule that triggers it
+- name: Install the udev rule that starts it
   ansible.builtin.template:
     src: 70-octoprint.rules.j2
     dest: /etc/udev/rules.d/70-octoprint.rules
     owner: root
     group: root
     mode: "0644"
+  notify: Reload udev rules
+
+# Also sets octoprint_webcam_controls on the camera, if there is one.
+- name: Find the printer and webcam
+  ansible.builtin.command: /usr/local/sbin/octoprint-devices apply
+  register: octoprint_devices
+  changed_when: "'changed=yes' in octoprint_devices.stdout_lines"
   notify:
-    - Reload udev rules
-    - Apply webcam controls
+    - Podman user daemon-reload
+    - Restart octoprint
+
+- name: Say what was found
+  vars:
+    octoprint_found: >-
+      {{ dict(octoprint_devices.stdout_lines | default([])
+              | select('match', '^(printer|webcam)=')
+              | map('regex_findall', '^([a-z]+)=(.*)$') | map('first')) }}
+  ansible.builtin.debug:
+    msg:
+      - >-
+        Printer: {{ octoprint_found.printer | default('', true)
+        or 'nothing in /dev/serial/by-id yet. /dev/ttyACM0 or /dev/ttyUSB0 is passed
+        through when it appears, so plug the printer in (or power it on) any time.' }}
+      - >-
+        Webcam: {{ 'off (octoprint_webcam_device)' if octoprint_webcam_device == 'off'
+        else octoprint_found.webcam | default('', true)
+        or 'none found. Plug one in any time: OctoPrint restarts with it, no make apply needed.' }}
+  when: octoprint_devices is not skipped
 
 - name: Apply group, unit and udev changes before starting
   ansible.builtin.meta: flush_handlers
@@ -250,6 +288,7 @@
   changed_when: true
   notify: Restart octoprint
 
+# Set even before a camera is plugged in, so one plugged in later just works.
 - name: Read OctoPrint's webcam settings
   become: true
   become_user: "{{ podman_user }}"
@@ -261,7 +300,7 @@
   register: octoprint_webcam_current
   changed_when: false
   check_mode: false
-  when: octoprint_webcam_device | length > 0
+  when: octoprint_webcam_device != 'off'
 
 - name: Point OctoPrint at the webcam stream and snapshot
   become: true

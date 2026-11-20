@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# Started by /etc/udev/rules.d/70-octoprint.rules when a USB serial port (%i =
+# tty) or camera (%i = video) appears. octoprint-devices finds the printer and
+# webcam, rewrites the container's device drop-in, and restarts OctoPrint if
+# it is running (for a camera, only if the drop-in changed).
+[Unit]
+Description=Pass a newly plugged %i device to OctoPrint
+After=user@{{ podman_user_uid }}.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/octoprint-devices %i

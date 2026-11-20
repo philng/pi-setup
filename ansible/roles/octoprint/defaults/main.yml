@@ -11,32 +11,40 @@ octoprint_port: 80
 # OctoPrint config, plugins, uploads and timelapses. Mounted at /octoprint.
 octoprint_data_dir: "{{ podman_user_home }}/octoprint"
 
-# Printer serial port on the host. Best: its stable path from
-#   ls /dev/serial/by-id/
-# set in inventory/host_vars/<host>.yml. It shows up inside the container
-# as /dev/ttyACM0, so OctoPrint's auto-detect finds it.
-# Empty: pass /dev/ttyACM0 and /dev/ttyUSB0 through as they are.
+# The printer and webcam are found on the Pi by themselves, at make apply and
+# whenever one is plugged in later, by /usr/local/sbin/octoprint-devices.
+# Nothing to set for one Prusa and one USB webcam: plug them in whenever.
+#
+# Printer: the /dev/serial/by-id/ entry whose name matches this regex
+# (case-insensitive), or else the only entry there. Neither (nothing plugged
+# in, or several unknown devices): /dev/ttyACM0 and /dev/ttyUSB0 are passed
+# through as they are, if they appear. Inside the container the printer is
+# always /dev/ttyACM0, so OctoPrint's auto-detect finds it.
+octoprint_printer_match: prusa
+# Set a path to skip detection, e.g. one from ls /dev/serial/by-id/.
 octoprint_printer_device: ""
 
-# USB webcam on the host, e.g. a path from ls /dev/v4l/by-id/ ending in
-# -video-index0. Empty: no webcam, mjpg-streamer stays off.
-# When set, the role also points OctoPrint's Classic Webcam at the stream and
-# snapshot URLs below, which plugins such as OctoEverywhere Gadget need.
+# Webcam: the /dev/v4l/by-id/*-video-index0 entry whose name matches this
+# regex, or else the only one. None: mjpg-streamer stays off until a camera
+# is plugged in, then OctoPrint restarts with it (no make apply needed).
+octoprint_webcam_match: "c920|webcam|camera"
+# Set a path to skip detection, or "off" to never use a webcam.
 octoprint_webcam_device: ""
 # Options for mjpg-streamer's input_uvc.so. A Logitech C920 sends MJPEG, so
 # "-n -r 1280x720 -f 15" is a good choice for it on a Pi 4.
 octoprint_mjpg_streamer_input: "-n -r 640x480"
+# Unless the webcam is "off", the role points OctoPrint's Classic Webcam at
+# these, which plugins such as OctoEverywhere Gadget need.
 octoprint_webcam_stream_url: /webcam/?action=stream
 octoprint_webcam_snapshot_url: http://localhost:8080/?action=snapshot
 
-# UVC controls to set on the webcam whenever it is plugged in (a udev rule
-# runs v4l2-ctl), in this order. List them with
+# UVC controls to set on the webcam whenever it appears (and on make apply),
+# with v4l2-ctl, in this order. List them with
 #   v4l2-ctl -d /dev/v4l/by-id/<camera> -l
 # For a C920, fixed focus keeps timelapses sharp:
 #   octoprint_webcam_controls:
 #     focus_automatic_continuous: 0
 #     focus_absolute: 0   # 0 = far; raise it until the bed is sharp
-# Needs octoprint_webcam_device set to a /dev/v4l/by-id/ path.
 octoprint_webcam_controls: {}
 
 # Plugins to make sure are installed, by pip name and install URL (the

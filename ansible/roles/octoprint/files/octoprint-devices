@@ -1,0 +1,146 @@
+#!/bin/sh
+# Find the printer and the webcam, and pass them to the OctoPrint container
+# through a Quadlet drop-in. Installed by the octoprint role.
+#
+#   octoprint-devices show    print the drop-in it would write; change nothing
+#   octoprint-devices apply   write the drop-in (make apply runs this)
+#   octoprint-devices tty     udev: a serial port appeared. Update the drop-in
+#                             and restart OctoPrint if it is running.
+#   octoprint-devices video   udev: a camera appeared. Update the drop-in and
+#                             restart OctoPrint only if something changed.
+#
+# stdout ends with printer=, webcam= and changed= lines; messages go to stderr
+# (the journal: journalctl -u 'octoprint-replug@*').
+#
+# Settings come from /etc/default/octoprint-devices, written by the role:
+#   PRINTER_DEVICE  path to use for the printer; empty: detect it
+#   PRINTER_MATCH   regex (case-insensitive) a /dev/serial/by-id/ name should match
+#   WEBCAM_DEVICE   path to use for the webcam; empty: detect it; "off": no webcam
+#   WEBCAM_MATCH    regex (case-insensitive) a /dev/v4l/by-id/ name should match
+#   MJPG_STREAMER_INPUT, WEBCAM_CONTROLS ("name=value name=value ..."),
+#   OCTOPRINT_USER, DROPIN
+# CONFIG and DEV (normally /dev) can be set in the environment, for tests.
+set -eu
+
+PRINTER_DEVICE=""
+PRINTER_MATCH="prusa"
+WEBCAM_DEVICE=""
+WEBCAM_MATCH="c920|webcam|camera"
+MJPG_STREAMER_INPUT="-n -r 640x480"
+WEBCAM_CONTROLS=""
+OCTOPRINT_USER=pods
+DROPIN=""
+CONFIG=${CONFIG:-/etc/default/octoprint-devices}
+DEV=${DEV:-/dev}
+# shellcheck source=/dev/null
+[ -r "$CONFIG" ] && . "$CONFIG"
+
+mode=${1:-show}
+case $mode in
+  show | apply | tty | video) ;;
+  *) echo "usage: $0 show|apply|tty|video" >&2; exit 2 ;;
+esac
+
+log() { echo "octoprint-devices: $*" >&2; }
+
+# by_id DIR SUFFIX PATTERN prints /dev/DIR/<name> for the entry in $DEV/DIR
+# whose name ends in SUFFIX and matches PATTERN, or else for the only entry
+# ending in SUFFIX. Several entries and no match: nothing, and a message.
+by_id() {
+  names=""
+  for path in "$DEV/$1"/*"$2"; do
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    names="$names${names:+
+}${path##*/}"
+  done
+  [ -n "$names" ] || return 0
+  hit=$(printf '%s\n' "$names" | grep -iE -- "$3" | head -n 1 || true)
+  if [ -z "$hit" ]; then
+    if [ "$(printf '%s\n' "$names" | wc -l)" -eq 1 ]; then
+      hit=$names
+    else
+      log "several devices in /dev/$1 and none matches '$3':" "$(printf '%s\n' "$names" | tr '\n' ' ')"
+      return 0
+    fi
+  fi
+  echo "/dev/$1/$hit"
+}
+
+if [ -n "$PRINTER_DEVICE" ]; then
+  printer=$PRINTER_DEVICE
+else
+  printer=$(by_id serial/by-id '' "$PRINTER_MATCH")
+fi
+
+case $WEBCAM_DEVICE in
+  off) webcam="" ;;
+  "") webcam=$(by_id v4l/by-id '-video-index0' "$WEBCAM_MATCH") ;;
+  *) webcam=$WEBCAM_DEVICE ;;
+esac
+# An explicit path that isn't plugged in yet counts as no webcam for now:
+# mjpg-streamer would only fail without one.
+if [ -n "$webcam" ] && [ ! -e "$DEV${webcam#/dev}" ]; then
+  log "webcam $webcam isn't plugged in"
+  webcam=""
+fi
+
+# A leading "-" on AddDevice means: skip it if it doesn't exist (yet).
+# Either way the printer is /dev/ttyACM0 inside, where OctoPrint looks.
+dropin="# Written by octoprint-devices (octoprint role). Don't edit: it is
+# rewritten whenever a printer or webcam is plugged in, and by make apply.
+[Container]"
+if [ -n "$printer" ]; then
+  dropin="$dropin
+AddDevice=-$printer:/dev/ttyACM0"
+else
+  log "no printer in /dev/serial/by-id; passing /dev/ttyACM0 and /dev/ttyUSB0 if they appear"
+  dropin="$dropin
+AddDevice=-/dev/ttyACM0
+AddDevice=-/dev/ttyUSB0"
+fi
+if [ -n "$webcam" ]; then
+  dropin="$dropin
+AddDevice=-$webcam:/dev/video0
+Environment=ENABLE_MJPG_STREAMER=true
+Environment=CAMERA_DEV=/dev/video0
+Environment=\"MJPG_STREAMER_INPUT=$MJPG_STREAMER_INPUT\""
+else
+  dropin="$dropin
+Environment=ENABLE_MJPG_STREAMER=false"
+fi
+
+changed=no
+if [ "$mode" = show ]; then
+  printf '%s\n' "$dropin"
+else
+  : "${DROPIN:?DROPIN is not set in $CONFIG}"
+  if [ ! -f "$DROPIN" ] || [ "$(cat "$DROPIN")" != "$dropin" ]; then
+    mkdir -p "$(dirname "$DROPIN")"
+    printf '%s\n' "$dropin" > "$DROPIN.tmp"
+    chown "$OCTOPRINT_USER:" "$(dirname "$DROPIN")" "$DROPIN.tmp" 2>/dev/null || true
+    chmod 0644 "$DROPIN.tmp"
+    mv "$DROPIN.tmp" "$DROPIN"
+    changed=yes
+    log "printer: ${printer:-none found}; webcam: ${webcam:-none}"
+  fi
+fi
+
+# Camera controls (focus etc.), each time it appears and on make apply.
+if [ -n "$webcam" ] && [ -n "$WEBCAM_CONTROLS" ] && [ "$mode" != show ]; then
+  for ctrl in $WEBCAM_CONTROLS; do
+    v4l2-ctl -d "$DEV${webcam#/dev}" --set-ctrl="$ctrl" ||
+      log "couldn't set $ctrl on $webcam"
+  done
+fi
+
+# A printer that was replugged needs a fresh container to be seen again, so
+# restart on every new serial port. A camera only when the drop-in changed,
+# so replugging a camera mid-print doesn't kill the print.
+if [ "$mode" = tty ] || { [ "$mode" = video ] && [ "$changed" = yes ]; }; then
+  systemctl --user -M "$OCTOPRINT_USER@" daemon-reload || true
+  systemctl --user -M "$OCTOPRINT_USER@" try-restart --no-block octoprint.service || true
+fi
+
+echo "printer=$printer"
+echo "webcam=$webcam"
+echo "changed=$changed"

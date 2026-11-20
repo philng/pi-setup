@@ -26,3 +26,8 @@ octoprint_firmwareupdater_profile:
   avrdude_avrmcu: m2560
   avrdude_programmer: wiring
   avrdude_baudrate: 115200
+
+# The webcam (a Logitech C920, whenever it's plugged in) sends MJPEG, so the
+# Pi 4 can stream 720p at 15 fps without re-encoding. The role finds the
+# camera and the printer by itself: docs/octoprint.md.
+octoprint_mjpg_streamer_input: "-n -r 1280x720 -f 15"

@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# Settings for /usr/local/sbin/octoprint-devices (see the octoprint role's defaults).
+OCTOPRINT_USER={{ podman_user | quote }}
+DROPIN={{ octoprint_devices_dropin | quote }}
+PRINTER_DEVICE={{ octoprint_printer_device | quote }}
+PRINTER_MATCH={{ octoprint_printer_match | quote }}
+WEBCAM_DEVICE={{ octoprint_webcam_device | quote }}
+WEBCAM_MATCH={{ octoprint_webcam_match | quote }}
+MJPG_STREAMER_INPUT={{ octoprint_mjpg_streamer_input | quote }}
+WEBCAM_CONTROLS={{ octoprint_webcam_controls.items() | map('join', '=') | join(' ') | quote }}

@@ -1,5 +1,5 @@
 ---
-# OctoPrint settings the role keeps in place when a webcam is set, per the
+# OctoPrint settings the role keeps in place unless the webcam is "off", per the
 # octoprint-docker README. mjpg-streamer listens on 8080 inside the
 # container; haproxy serves the stream to browsers under /webcam/.
 octoprint_webcam_settings:
@@ -17,3 +17,6 @@ octoprint_cli: "{{ octoprint_exec }} octoprint --basedir /octoprint/octoprint"
 # plugin, 3 since 1.13). Written with the profile so the plugin doesn't run
 # its old-settings migration on first load, which would replace the profile.
 octoprint_firmwareupdater_settings_version: 3
+
+# Quadlet drop-in with the printer and webcam, written by octoprint-devices.
+octoprint_devices_dropin: "{{ podman_user_home }}/.config/containers/systemd/octoprint.container.d/50-devices.conf"

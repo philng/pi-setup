@@ -15,13 +15,3 @@
 - name: Reload systemd
   ansible.builtin.systemd_service:
     daemon_reload: true
-
-# udev applies the controls on the next plug-in; this applies them now.
-- name: Apply webcam controls
-  ansible.builtin.shell: |
-    [ -e {{ octoprint_webcam_device | quote }} ] || exit 0
-    {% for name, value in octoprint_webcam_controls.items() %}
-    v4l2-ctl -d {{ octoprint_webcam_device | quote }} --set-ctrl={{ name }}={{ value }}
-    {% endfor %}
-  when: octoprint_webcam_controls | length > 0
-  changed_when: true
