@@ -1,7 +1,8 @@
 # Step 2: Base setup and USB/IP server
 
 `make apply` now configures every Pi with the **base** role, and the USB/IP Pi
-(`pilab`, group `usbip`) with the **usbip** role.
+(`pilab`, group `usbip`) with the **usbip** role. The `usbip` group ships empty:
+`make new-pi --role usbip` adds `pilab` to it when you set that Pi up.
 
 ## What the base role does (every Pi)
 

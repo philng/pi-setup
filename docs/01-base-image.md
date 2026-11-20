@@ -127,7 +127,7 @@ runs on first boot only). Then, from the repo on your computer (on Windows, in t
 WSL Ubuntu window, see [windows.md](windows.md)):
 
 ```bash
-make ping   # first run installs Ansible into .venv/. Expect: pilab | SUCCESS => "ping": "pong"
+make ping   # first run installs Ansible into .venv/. Expect: <each Pi> | SUCCESS => "ping": "pong"
 ```
 
 ### How your computer finds the Pis

@@ -38,15 +38,24 @@ setup
 if run --yes --role printer --hostname printer2 --boot "$WORK/boot" >"$WORK/out" 2>&1 \
   && [[ $(group_of printer2) == "printers printer2" ]] \
   && [[ $(user_data) == "printer2 admin" ]] \
-  && [[ $(group_of octopi) == "printers octopi" && $(group_of pilab) == "usbip pilab" ]]; then
+  && [[ $(group_of octopi) == "printers octopi" ]]; then
   pass "non-interactive new printer"
 else fail "non-interactive new printer"; cat "$WORK/out"; fi
+
+# 1b. The first Pi in a group with no hosts yet (usbip ships empty) lands there,
+#     and the result is still a valid inventory.
+setup
+if [[ -z $(group_of pilab) ]] \
+  && run --yes --role usbip --hostname pilab --no-boot >"$WORK/out" 2>&1 \
+  && [[ $(group_of pilab) == "usbip pilab" && $(group_of octopi) == "printers octopi" ]]; then
+  pass "first Pi in an empty group"
+else fail "first Pi in an empty group"; cat "$WORK/out"; fi
 
 # 2. Re-flashing a host that's already there leaves the inventory alone.
 setup
 cp "$INV" "$WORK/inv.before"
-if run --yes --role usbip --hostname pilab --boot "$WORK/boot" >"$WORK/out" 2>&1 \
-  && cmp -s "$INV" "$WORK/inv.before" && [[ $(user_data) == "pilab admin" ]]; then
+if run --yes --role printer --hostname octopi --boot "$WORK/boot" >"$WORK/out" 2>&1 \
+  && cmp -s "$INV" "$WORK/inv.before" && [[ $(user_data) == "octopi admin" ]]; then
   pass "re-flash keeps inventory"
 else fail "re-flash keeps inventory"; cat "$WORK/out"; fi
 

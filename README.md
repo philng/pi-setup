@@ -69,6 +69,10 @@ hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
 | `pilab` | `usbip` | base, usbip, dotfiles |
 | `octopi` | `printers` | base, podman, octoprint, dotfiles |
 
+`ansible/inventory/hosts.yml` lists only the Pis you actually have: `make new-pi` adds
+each one as you set it up, so every `make` target works with just `octopi`, just `pilab`,
+or both. The `usbip` group ships empty until you add the USB/IP Pi.
+
 Every Pi also gets the `dotfiles` role: zsh as the `admin` login shell, vim, and
 [philng/dotfiles](https://github.com/philng/dotfiles) cloned to `~/.dotfiles` with its
 `home/` files linked into `~` (existing files are kept as `<file>.pre-dotfiles`).

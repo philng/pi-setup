@@ -84,8 +84,15 @@ $(COLLECTIONS)-dev: | $(COLLECTIONS)
 	cd $(ANSIBLE_DIR) && ansible-galaxy collection install community.docker
 	@touch $@
 
+# Only the Pis in ansible/inventory/hosts.yml are contacted: make new-pi adds each
+# one as you set it up, so a Pi you don't have yet is never tried. Exit code 4
+# means a Pi was UNREACHABLE: say what to do about that.
 ping: deps ## Check the Pis are reachable over SSH
-	cd $(ANSIBLE_DIR) && ansible $(or $(LIMIT),pis) -m ansible.builtin.ping
+	@cd $(ANSIBLE_DIR) && ansible $(or $(LIMIT),pis) -m ansible.builtin.ping || { rc=$$?; \
+	  [ $$rc -ne 4 ] || { echo; \
+	  echo "A Pi above didn't answer. If you haven't set it up yet, remove it from"; \
+	  echo "ansible/inventory/hosts.yml (make new-pi adds it back later)."; \
+	  echo "To check just one Pi: make ping LIMIT=octopi"; }; exit $$rc; }
 
 apply: deps ## Configure the Pis
 	cd $(ANSIBLE_DIR) && ansible-playbook site.yml $(LIMIT_ARG)

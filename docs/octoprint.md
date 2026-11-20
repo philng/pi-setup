@@ -2,8 +2,8 @@
 
 A dedicated Raspberry Pi 4 next to the 3D printer runs OctoPrint as a rootless
 Podman container, configured from this repo like `pilab`. It's in the inventory
-as `octopi` (group `printers`) and gets the `podman` and `octoprint` roles, plus
-the shared `base` role once that lands.
+as `octopi` (group `printers`; `make new-pi` adds it if it's missing) and gets the
+`podman` and `octoprint` roles, plus the shared `base` role once that lands.
 
 Why a container and not the OctoPi image: the Pi is rebuilt the same way as the
 other one (flash, first-boot script, `make apply`), the settings live in git and
