@@ -7,7 +7,10 @@ Description=OctoPrint
 ContainerName=octoprint
 Image={{ octoprint_image }}
 AutoUpdate=registry
-PublishPort={{ octoprint_port }}:80
+# IPv4 only: haproxy in the image listens on IPv4 only, so a forwarded IPv6
+# connection would be accepted by pasta and then reset. Unbound, IPv6
+# clients get "refused" and fall back to IPv4 at once.
+PublishPort=0.0.0.0:{{ octoprint_port }}:80
 Volume={{ octoprint_data_dir }}:/octoprint
 # Keep the host user's dialout/video groups inside the container (needs crun).
 PodmanArgs=--group-add keep-groups

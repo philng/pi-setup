@@ -20,3 +20,6 @@ octoprint_firmwareupdater_settings_version: 3
 
 # Quadlet drop-in with the printer and webcam, written by octoprint-devices.
 octoprint_devices_dropin: "{{ podman_user_home }}/.config/containers/systemd/octoprint.container.d/50-devices.conf"
+
+# How long to wait for OctoPrint's web UI after a (re)start: tries, 1 s apart.
+octoprint_start_retries: 300
