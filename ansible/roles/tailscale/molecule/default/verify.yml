@@ -65,10 +65,11 @@
       changed_when: false
       failed_when: false
 
-    - name: Not joined without a key, Tailscale SSH on as asked
+    - name: Waiting on its login link (from Tailscale's real servers), Tailscale SSH on as asked
       ansible.builtin.assert:
         that:
           - (tailscale_verify_ts.results[0].stdout | from_json).BackendState == 'NeedsLogin'
+          - (tailscale_verify_ts.results[0].stdout | from_json).AuthURL is match('https://login\\.tailscale\\.com/')
           - (tailscale_verify_ts.results[1].stdout | from_json).RunSSH
 
     - name: Look for a leftover auth key file

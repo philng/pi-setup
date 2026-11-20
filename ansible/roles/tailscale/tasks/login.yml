@@ -23,9 +23,10 @@
     tailscale_state: "{{ (tailscale_status_raw.stdout | from_json).BackendState }}"
 
 # Logged in already (Running, or Stopped by `tailscale down`): leave it be.
-# Logged out: join with the auth key, if there is one.
+# Logged out: with an auth key (TAILSCALE_AUTHKEY), join straight away;
+# otherwise print Tailscale's login link and wait for you to open it.
 - name: Join the tailnet
-  when: tailscale_state == 'NeedsLogin' and tailscale_authkey | length > 0
+  when: tailscale_state == 'NeedsLogin' and not ansible_check_mode
   block:
     # A file, so the key never shows up in the process list.
     - name: Hand the auth key to the Pi
@@ -36,19 +37,65 @@
         group: root
         mode: "0600"
       no_log: true
+      when: tailscale_authkey | length > 0
 
-    # --reset: the flags below are the whole configuration, whatever was set before.
-    - name: Log in with the auth key
+    # --reset: the flags below are the whole configuration, whatever was set
+    # before. Without a key, `up` asks the Tailscale servers for a login link
+    # and gives up waiting after a few seconds; tailscaled keeps the link, and
+    # the Pi joins whenever it is opened.
+    - name: Start logging in
       ansible.builtin.command:
-        argv: "{{ ['tailscale', 'up', '--reset', '--timeout=60s',
-                   '--auth-key=file:/run/tailscale-authkey',
+        argv: "{{ ['tailscale', 'up', '--reset',
+                   '--timeout=' ~ ('60s' if tailscale_authkey | length > 0 else '10s'),
                    '--hostname=' ~ tailscale_hostname,
-                   '--ssh=' ~ (tailscale_ssh | bool | lower)] + tailscale_up_args }}"
-      changed_when: true
+                   '--ssh=' ~ (tailscale_ssh | bool | lower)]
+                  + (['--auth-key=file:/run/tailscale-authkey'] if tailscale_authkey | length > 0 else [])
+                  + tailscale_up_args }}"
+      register: tailscale_up
+      changed_when: tailscale_up.rc == 0
+      failed_when: tailscale_up.rc != 0 and tailscale_authkey | length > 0
 
-    - name: Note that it joined
+    - name: Read the login link
+      ansible.builtin.command: tailscale status --json --peers=false
+      register: tailscale_login_raw
+      changed_when: false
+      retries: 10
+      delay: 2
+      until: >-
+        (tailscale_login_raw.stdout | from_json).BackendState == 'Running'
+        or (tailscale_login_raw.stdout | from_json).AuthURL | default('', true) | length > 0
+      when: tailscale_up.rc != 0
+
+    - name: Ask you to open the login link
+      ansible.builtin.debug:
+        msg:
+          - "ACTION NEEDED: add {{ inventory_hostname }} to your tailnet by opening this link"
+          - "  {{ (tailscale_login_raw.stdout | from_json).AuthURL }}"
+          - "{{ 'Waiting up to ' ~ tailscale_login_wait ~ ' seconds for you to approve it...'
+                if tailscale_login_wait | int > 0
+                else 'Not waiting (tailscale_login_wait is 0). It joins whenever you open the link.' }}"
+      when:
+        - tailscale_login_raw is not skipped
+        - (tailscale_login_raw.stdout | from_json).BackendState != 'Running'
+
+    - name: Wait for you to approve the Pi
+      ansible.builtin.command: tailscale status --json --peers=false
+      register: tailscale_wait_raw
+      changed_when: (tailscale_wait_raw.stdout | from_json).BackendState == 'Running'
+      failed_when: false
+      retries: "{{ (tailscale_login_wait | int / 5) | round(0, 'ceil') | int }}"
+      delay: 5
+      until: (tailscale_wait_raw.stdout | from_json).BackendState == 'Running'
+      when:
+        - tailscale_login_raw is not skipped
+        - (tailscale_login_raw.stdout | from_json).BackendState != 'Running'
+        - tailscale_login_wait | int > 0
+
+    - name: Note the result
       ansible.builtin.set_fact:
-        tailscale_state: Running
+        tailscale_state: >-
+          {{ 'Running' if tailscale_up.rc == 0
+             else (tailscale_wait_raw.stdout | default(tailscale_login_raw.stdout) | from_json).BackendState }}
   always:
     - name: Remove the auth key from the Pi
       ansible.builtin.file:
@@ -58,14 +105,13 @@
 - name: Say why this Pi isn't in the tailnet
   ansible.builtin.debug:
     msg: >-
-      WARNING: {{ inventory_hostname }} is not in your tailnet:
+      WARNING: {{ inventory_hostname }} is not in your tailnet yet:
       {{ 'it is waiting for approval in the Tailscale admin console (Machines).'
          if tailscale_state == 'NeedsMachineAuth' else
-         'no auth key was given. Put one in secrets/tailscale-authkey or TAILSCALE_AUTHKEY'
-         ~ ' and run make apply again (see docs/tailscale.md).'
+         'open the login link printed above (it stays valid), or run make apply again for a new one.'
          if tailscale_state == 'NeedsLogin' else
          'Tailscale reports ' ~ tailscale_state ~ '.' }}
-  when: tailscale_state not in ['Running', 'Stopped', 'Starting']
+  when: tailscale_state not in ['Running', 'Stopped', 'Starting'] and not ansible_check_mode
 
 # Tailscale SSH on or off, also on a Pi that joined earlier.
 - name: Read Tailscale's settings

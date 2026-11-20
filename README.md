@@ -73,9 +73,9 @@ hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
 each one as you set it up, so every `make` target works with just `octopi`, just `pilab`,
 or both. The `usbip` group ships empty until you add the USB/IP Pi.
 
-Every Pi also gets [Tailscale](docs/tailscale.md), joined to your tailnet with an auth key
-you give at apply time (kept in the git-ignored `secrets/`), so `ssh admin@octopi` works
-from anywhere on your tailnet.
+Every Pi also gets [Tailscale](docs/tailscale.md): the first `make apply` prints a login
+link for each Pi, and once you open it `ssh admin@octopi` works from anywhere on your
+tailnet.
 
 Every Pi also gets the `dotfiles` role: zsh as the `admin` login shell, vim, and
 [philng/dotfiles](https://github.com/philng/dotfiles) cloned to `~/.dotfiles` with its
