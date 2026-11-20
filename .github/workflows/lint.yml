@@ -46,6 +46,8 @@ jobs:
           path: ansible/.collections
           key: collections-v2-lint-${{ steps.week.outputs.week }}-${{ hashFiles('ansible/requirements.yml') }}
       - run: make deps-dev
+      # The script tests below check YAML with python3, so use .venv's (it has PyYAML).
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: make lint
       - name: Client auto-attach tests
         run: tests/client/test-autoattach.sh
