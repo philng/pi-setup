@@ -1,0 +1,80 @@
+---
+- name: Enable tailscaled
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    enabled: true
+    state: started
+
+# Right after starting, tailscaled reports NoState for a moment.
+- name: Read Tailscale's state
+  ansible.builtin.command: tailscale status --json --peers=false
+  register: tailscale_status_raw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  retries: 15
+  delay: 2
+  until: >-
+    tailscale_status_raw.stdout is match('\\s*\\{')
+    and (tailscale_status_raw.stdout | from_json).get('BackendState', '') not in ['', 'NoState']
+
+- name: Work out whether this Pi is in the tailnet
+  ansible.builtin.set_fact:
+    tailscale_state: "{{ (tailscale_status_raw.stdout | from_json).BackendState }}"
+
+# Logged in already (Running, or Stopped by `tailscale down`): leave it be.
+# Logged out: join with the auth key, if there is one.
+- name: Join the tailnet
+  when: tailscale_state == 'NeedsLogin' and tailscale_authkey | length > 0
+  block:
+    # A file, so the key never shows up in the process list.
+    - name: Hand the auth key to the Pi
+      ansible.builtin.copy:
+        dest: /run/tailscale-authkey
+        content: "{{ tailscale_authkey }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    # --reset: the flags below are the whole configuration, whatever was set before.
+    - name: Log in with the auth key
+      ansible.builtin.command:
+        argv: "{{ ['tailscale', 'up', '--reset', '--timeout=60s',
+                   '--auth-key=file:/run/tailscale-authkey',
+                   '--hostname=' ~ tailscale_hostname,
+                   '--ssh=' ~ (tailscale_ssh | bool | lower)] + tailscale_up_args }}"
+      changed_when: true
+
+    - name: Note that it joined
+      ansible.builtin.set_fact:
+        tailscale_state: Running
+  always:
+    - name: Remove the auth key from the Pi
+      ansible.builtin.file:
+        path: /run/tailscale-authkey
+        state: absent
+
+- name: Say why this Pi isn't in the tailnet
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: {{ inventory_hostname }} is not in your tailnet:
+      {{ 'it is waiting for approval in the Tailscale admin console (Machines).'
+         if tailscale_state == 'NeedsMachineAuth' else
+         'no auth key was given. Put one in secrets/tailscale-authkey or TAILSCALE_AUTHKEY'
+         ~ ' and run make apply again (see docs/tailscale.md).'
+         if tailscale_state == 'NeedsLogin' else
+         'Tailscale reports ' ~ tailscale_state ~ '.' }}
+  when: tailscale_state not in ['Running', 'Stopped', 'Starting']
+
+# Tailscale SSH on or off, also on a Pi that joined earlier.
+- name: Read Tailscale's settings
+  ansible.builtin.command: tailscale debug prefs
+  register: tailscale_prefs
+  changed_when: false
+  check_mode: false
+
+- name: Turn Tailscale SSH {{ 'on' if tailscale_ssh | bool else 'off' }}
+  ansible.builtin.command: tailscale set --ssh={{ tailscale_ssh | bool | lower }}
+  changed_when: true
+  when: (tailscale_prefs.stdout | from_json).RunSSH | default(false) | bool != tailscale_ssh | bool

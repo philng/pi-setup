@@ -66,12 +66,16 @@ hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
 
 | Host | Inventory group | Roles |
 | --- | --- | --- |
-| `pilab` | `usbip` | base, usbip, dotfiles |
-| `octopi` | `printers` | base, podman, octoprint, dotfiles |
+| `pilab` | `usbip` | base, tailscale, usbip, dotfiles |
+| `octopi` | `printers` | base, tailscale, podman, octoprint, dotfiles |
 
 `ansible/inventory/hosts.yml` lists only the Pis you actually have: `make new-pi` adds
 each one as you set it up, so every `make` target works with just `octopi`, just `pilab`,
 or both. The `usbip` group ships empty until you add the USB/IP Pi.
+
+Every Pi also gets [Tailscale](docs/tailscale.md), joined to your tailnet with an auth key
+you give at apply time (kept in the git-ignored `secrets/`), so `ssh admin@octopi` works
+from anywhere on your tailnet.
 
 Every Pi also gets the `dotfiles` role: zsh as the `admin` login shell, vim, and
 [philng/dotfiles](https://github.com/philng/dotfiles) cloned to `~/.dotfiles` with its
@@ -99,6 +103,7 @@ Re-run `make apply` to pull dotfile changes.
 4. [Health check and moving to the SSD](docs/04-ssd.md)
 5. [OctoPrint on a second Pi](docs/octoprint.md)
 6. [Running the setup from Windows (WSL)](docs/windows.md)
+7. [Tailscale on every Pi](docs/tailscale.md), incl. joining the tailnet and its smoke test
 
 Day to day: `make apply` after changing anything, `make health` to check on the Pis.
 

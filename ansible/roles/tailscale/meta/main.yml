@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: tailscale
+  author: philng
+  description: Tailscale from its apt repo, joined with an auth key at apply time (expects the base role's firewall)
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

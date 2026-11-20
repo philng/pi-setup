@@ -1,0 +1,12 @@
+---
+# No auth key here, so the Pi is set up but not joined: the role must warn,
+# not fail, and a second run must change nothing.
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    tailscale_ssh: true
+    tailscale_authkey: ""
+  roles:
+    - base
+    - tailscale
