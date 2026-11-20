@@ -308,12 +308,32 @@ can prove:
 | Firmware Updater | Installed like any plugin, pinned to a release tag. When it has no profile with a flash method, the role writes `octoprint_firmwareupdater_profile` with `octoprint config set` (plus the plugin's settings version, so its first-load migration doesn't replace it). The role first checks the image has the profile's `avrdude_path` |
 | Plugging in later | Quadlet only passes a device that exists when the unit is generated, and a running container never sees new devices. `/etc/udev/rules.d/70-octoprint.rules` starts `octoprint-replug@tty.service` when a USB serial port appears and `octoprint-replug@video.service` when a camera does. Both rerun `octoprint-devices`, which regenerates the unit; a serial port always restarts OctoPrint (if running), a camera only when the drop-in changed, so replugging the same camera mid-print doesn't stop the print |
 
-Useful commands on the Pi:
+Useful commands on the Pi. `pods` can't enter your home folder, so the
+`podman` ones start with `cd /`:
 
 ```bash
 sudo systemctl --user -M pods@ status octoprint      # service state
 sudo journalctl _SYSTEMD_USER_UNIT=octoprint.service -f  # service log
-sudo -u pods XDG_RUNTIME_DIR=/run/user/$(id -u pods) podman logs -f octoprint
+cd / && sudo -u pods XDG_RUNTIME_DIR=/run/user/$(id -u pods) podman ps -a
+cd / && sudo -u pods XDG_RUNTIME_DIR=/run/user/$(id -u pods) podman logs -f octoprint
+sudo octoprint-devices show                          # what it detects right now
+sudo journalctl -u 'octoprint-replug@*'              # plug-in events (none yet: "No data available")
 ```
+
+### Troubleshooting
+
+- **OctoPrint is running but there's no printer port** (Connection panel
+  lists nothing, `make apply` says `Printer: nothing in /dev/serial/by-id
+  yet`): the Pi doesn't see the printer over USB at all. Check that
+  `ls /dev/serial/by-id/` lists a `usb-Prusa_Research_...` entry. If it
+  doesn't, `sudo dmesg -w` while you replug the cable should show a new
+  `cdc_acm` device. If nothing shows up, check that the printer is switched
+  on, use a different USB cable (many thin ones only carry power), and try
+  the other black USB 2 port. As soon as it appears, OctoPrint restarts with it.
+- **<http://octopi> doesn't load, but the service is active:** try
+  `curl -sI http://octopi` from your computer and `curl -sI http://localhost`
+  on the Pi. If it works on the Pi but not from your computer, check that
+  your computer's address is in `base_lan_cidrs_v4` (the firewall allows
+  port 80 from the LAN only), or use the Pi's Tailscale name.
 
 Never port-forward OctoPrint to the internet; use a VPN such as Tailscale.
