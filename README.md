@@ -124,8 +124,12 @@ Podman's Docker-compatible socket once with `systemctl --user enable --now podma
 (or force an engine with `make test CONTAINER_ENGINE=podman`). Locally the test
 container runs on your PC's CPU (x86_64), CI runs it on arm64.
 
-CI runs lint on every PR and push to main, Molecule on PRs only (just the roles
-the PR changes), and the boot-script checks on Linux and macOS only when
-`scripts/configure-boot.*` or `bootstrap/` change. Docs-only changes and draft PRs
-skip CI; mark a PR ready for review to run it. Every workflow can also be run by
-hand from the Actions tab.
+CI (`.github/workflows/ci.yml`) runs on a PR only what its changes need:
+yamllint for YAML, ansible-lint for `ansible/`, shellcheck and the script tests for
+their scripts, Molecule for the roles the PR changes (and the scenarios that apply
+them), and the boot-script checks on Linux and macOS for `scripts/` and
+`bootstrap/`. A change to the workflow, `Makefile`, `mise.toml` or the
+requirements runs everything. Docs-only changes and draft PRs run nothing heavy;
+mark a PR ready for review to run it. Pushes to main, a weekly run (Mondays) and a
+manual run from the Actions tab test everything. The `CI ok` check sums it up: it
+passes when every job passed or was skipped, so it is the one to require.

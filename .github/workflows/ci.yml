@@ -1,0 +1,282 @@
+---
+# All of CI in one workflow. On a PR, the `changes` job works out what changed,
+# and every other job runs only for its own files:
+#   lint          yamllint, ansible-lint, shellcheck and each script test,
+#                 each step only when its files changed
+#   molecule      only the roles the PR changes, plus scenarios that apply them
+#   boot-scripts  Linux + macOS, only for the boot scripts and bootstrap/
+# Shared files (this workflow, Makefile, mise.toml, requirements*.txt) run it all.
+# Pushes to main, the weekly run and a manual run (Actions > ci > Run workflow)
+# test everything, so nothing rots unnoticed. Docs-only PRs run nothing heavy.
+#
+# `CI ok` always runs and passes when nothing failed (skipped is fine). It is the
+# one check to require for merging, so skipped jobs never block a PR.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: "17 4 * * 1"  # Mondays 04:17 UTC
+  workflow_dispatch:
+
+# A new push to a PR cancels the run for the push before it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read  # paths-filter lists a PR's files through the API
+
+jobs:
+  changes:
+    # Draft PRs skip CI; mark the PR ready for review to run it.
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      yaml: ${{ steps.out.outputs.yaml }}
+      ansible: ${{ steps.out.outputs.ansible }}
+      shell: ${{ steps.out.outputs.shell }}
+      client_tests: ${{ steps.out.outputs.client_tests }}
+      octoprint_tests: ${{ steps.out.outputs.octoprint_tests }}
+      new_pi_tests: ${{ steps.out.outputs.new_pi_tests }}
+      boot: ${{ steps.out.outputs.boot }}
+      lint: ${{ steps.out.outputs.lint }}
+      roles: ${{ steps.roles.outputs.roles }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        with:
+          filters: |
+            shared: &shared
+              - .github/workflows/ci.yml
+              - Makefile
+              - mise.toml
+              - requirements*.txt
+            yaml:
+              - *shared
+              - "**/*.yml"
+              - "**/*.yaml"
+              - .yamllint
+            ansible:
+              - *shared
+              - ansible/**
+            shell:
+              - *shared
+              - scripts/*.sh
+              - client/linux/*.sh
+              - client/linux/usbip-autoattach
+              - ansible/roles/octoprint/files/octoprint-devices
+              - tests/**/*.sh
+              - .github/scripts/*.sh
+              - .githooks/pre-commit
+            client_tests:
+              - *shared
+              - client/**
+              - tests/client/**
+            octoprint_tests:
+              - *shared
+              - ansible/roles/octoprint/files/**
+              - tests/octoprint/**
+            new_pi_tests:
+              - *shared
+              - scripts/**
+              - bootstrap/**
+              - ansible/inventory/**
+              - tests/bootstrap/**
+            boot:
+              - *shared
+              - scripts/configure-boot.*
+              - scripts/new-pi.sh
+              - bootstrap/**
+              - tests/bootstrap/**
+      # Anything but a PR (push to main, weekly, manual) runs everything.
+      - id: out
+        env:
+          PR: ${{ github.event_name == 'pull_request' }}
+          FILTER: ${{ toJSON(steps.filter.outputs) }}
+        run: |
+          lint=false
+          for k in yaml ansible shell client_tests octoprint_tests new_pi_tests boot; do
+            v=true
+            [ "$PR" != true ] || v=$(jq -r --arg k "$k" '.[$k] // "false"' <<<"$FILTER")
+            echo "$k=$v" | tee -a "$GITHUB_OUTPUT"
+            if [ "$k" != boot ] && [ "$v" = true ]; then lint=true; fi
+          done
+          echo "lint=$lint" | tee -a "$GITHUB_OUTPUT"
+      # PRs test only the roles they touch (shared files still test them all).
+      - id: roles
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          roles=$(.github/scripts/molecule-roles.sh ${BASE:+"$BASE"})
+          echo "roles=$roles" | tee -a "$GITHUB_OUTPUT"
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # The same tools as `make deps-dev` locally: Python and uv from mise.toml,
+      # Python packages from requirements-dev.txt.
+      - uses: jdx/mise-action@v3
+        env:
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+        with:
+          version: 2026.11.10
+          cache: true
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements*.txt') }}
+      # Refreshed weekly, so new collection releases still get tested.
+      - id: week
+        run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache Ansible collections
+        uses: actions/cache@v4
+        with:
+          path: ansible/.collections
+          key: collections-v2-lint-${{ steps.week.outputs.week }}-${{ hashFiles('ansible/requirements.yml') }}
+      - id: deps
+        run: make deps-dev
+      # The script tests below check YAML with python3, so use .venv's (it has PyYAML).
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      # Each check runs even if one before it failed, so one push shows them all.
+      - name: yamllint
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.yaml == 'true' }}
+        run: make lint-yaml
+      - name: ansible-lint
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.ansible == 'true' }}
+        run: make lint-ansible
+      - name: shellcheck
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.shell == 'true' }}
+        run: make lint-shell
+      - name: Client auto-attach tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.client_tests == 'true' }}
+        run: tests/client/test-autoattach.sh
+      - name: OctoPrint device detection tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.octoprint_tests == 'true' }}
+        run: tests/octoprint/test-devices.sh
+      - name: New-Pi wizard tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.new_pi_tests == 'true' }}
+        run: tests/bootstrap/test-new-pi.sh
+
+  # Each role's Molecule scenario in an arm64 Debian trixie container with
+  # systemd: install, converge, a second run that must change nothing, verify.
+  molecule:
+    needs: changes
+    if: needs.changes.outputs.roles != '' && needs.changes.outputs.roles != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        role: ${{ fromJSON(needs.changes.outputs.roles) }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Build the test image while Python and collections install.
+      - name: Start building the Molecule test image
+        run: (make molecule-image > "$RUNNER_TEMP/image.log" 2>&1; echo $? > "$RUNNER_TEMP/image.rc") &
+      - uses: jdx/mise-action@v3
+        env:
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+        with:
+          version: 2026.11.10
+          cache: true
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements*.txt') }}
+      - id: week
+        run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache Ansible collections
+        uses: actions/cache@v4
+        with:
+          path: ansible/.collections
+          key: collections-v2-molecule-${{ steps.week.outputs.week }}-${{ hashFiles('ansible/requirements.yml') }}
+      - run: make deps-dev
+      - name: Wait for the test image
+        run: |
+          while [ ! -f "$RUNNER_TEMP/image.rc" ]; do sleep 1; done
+          cat "$RUNNER_TEMP/image.log"
+          exit "$(cat "$RUNNER_TEMP/image.rc")"
+      # The runner is thrown away, so skip Molecule's destroy steps (~15s).
+      - run: make molecule ROLE=${{ matrix.role }} MOLECULE_ARGS="--destroy=never"
+
+  # The boot-partition scripts on every OS you might flash from, against a fake
+  # bootfs folder; check the result parses as YAML.
+  boot-scripts:
+    needs: changes
+    if: needs.changes.outputs.boot == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Make a fake bootfs and SSH key
+        shell: bash
+        run: |
+          mkdir -p fakeboot keys
+          touch fakeboot/config.txt fakeboot/cmdline.txt
+          echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest ci@example" > keys/id.pub
+          mkdir -p fakeboot2
+          touch fakeboot2/config.txt fakeboot2/cmdline.txt
+      - name: Run configure-boot.sh
+        run: |
+          SSH_PUBKEY_FILE=keys/id.pub scripts/configure-boot.sh fakeboot
+          PI_HOSTNAME=octopi SSH_PUBKEY_FILE=keys/id.pub scripts/configure-boot.sh fakeboot2
+      - name: Check output
+        shell: bash
+        run: |
+          python3 -m pip install -q pyyaml
+          python3 - <<'PY'
+          import yaml
+          for boot, host in [("fakeboot", "pilab"), ("fakeboot2", "octopi")]:
+              raw = open(f"{boot}/user-data", "rb").read()
+              assert not raw.startswith(b"\xef\xbb\xbf"), "BOM in user-data"
+              assert b"\r\n" not in raw, "CRLF in user-data"
+              assert raw.startswith(b"#cloud-config"), "missing #cloud-config header"
+              d = yaml.safe_load(raw)
+              assert d["hostname"] == host, d["hostname"]
+              assert d["users"][0]["ssh_authorized_keys"][0].endswith("ci@example")
+              assert yaml.safe_load(open(f"{boot}/network-config"))["network"]["version"] == 2
+              assert open(f"{boot}/meta-data").read().strip() == f"instance-id: {host}"
+          print("ok")
+          PY
+      # The wizard on macOS's bash 3.2 and BSD tools (Linux runs it in the lint job).
+      - name: New-Pi wizard tests
+        if: runner.os == 'macOS'
+        run: tests/bootstrap/test-new-pi.sh
+
+  # The one check to require: passes when every job passed or was skipped.
+  ci-ok:
+    name: CI ok
+    if: always()
+    needs: [changes, lint, molecule, boot-scripts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "changes, lint, molecule, boot-scripts: $RESULTS"
+          case " $RESULTS " in
+            *" failure "* | *" cancelled "*) echo "A job failed or was cancelled."; exit 1 ;;
+          esac

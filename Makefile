@@ -5,7 +5,7 @@ export ANSIBLE_CONFIG := $(CURDIR)/$(ANSIBLE_DIR)/ansible.cfg
 # the Pi: Ansible reaches the Pis over SSH. Run `make` alone for this list.
 .DEFAULT_GOAL := help
 
-.PHONY: help new-pi wait-pi deps deps-dev lock ping apply check health lint hooks test octoprint-backup molecule-image molecule
+.PHONY: help new-pi wait-pi deps deps-dev lock ping apply check health lint lint-yaml lint-ansible lint-shell hooks test octoprint-backup molecule-image molecule
 
 # Tools come from mise and .venv, so every computer and CI run the same versions:
 # mise installs the Python and uv pinned in mise.toml, and uv installs Ansible
@@ -108,9 +108,16 @@ health: deps ## Read-only health report (fails if something needs attention)
 octoprint-backup: deps ## Copy OctoPrint settings from the printer Pi to backups/octoprint/
 	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook octoprint-backup.yml $(LIMIT_ARG)
 
-lint: deps-dev ## Lint YAML, Ansible and shell
+lint: lint-yaml lint-ansible lint-shell ## Lint YAML, Ansible and shell
+
+# CI runs each of these only when its files change.
+lint-yaml: deps-dev
 	yamllint .
+
+lint-ansible: deps-dev
 	cd $(ANSIBLE_DIR) && ansible-lint
+
+lint-shell: deps-dev
 	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach ansible/roles/octoprint/files/octoprint-devices tests/client/*.sh tests/bootstrap/*.sh tests/octoprint/*.sh .github/scripts/*.sh .githooks/pre-commit
 
 hooks: ## Lint before every commit (git pre-commit hook in .githooks/)
