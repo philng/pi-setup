@@ -3,9 +3,9 @@
   hosts: all
   become: true
   vars:
-    # A C920's by-id path. Nothing is plugged in, so Quadlet skips it, but
-    # the webcam settings, plugin install and udev rule are all exercised.
-    octoprint_webcam_device: /dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_MOLECULE-video-index0
+    # Nothing is plugged in at first: the role must still work, with no
+    # printer and no webcam. verify.yml then plugs in fakes, like udev would.
+    octoprint_mjpg_streamer_input: "-n -r 1280x720 -f 15"
     octoprint_webcam_controls:
       focus_automatic_continuous: 0
       focus_absolute: 0

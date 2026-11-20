@@ -111,7 +111,7 @@ octoprint-backup: deps ## Copy OctoPrint settings from the printer Pi to backups
 lint: deps-dev ## Lint YAML, Ansible and shell
 	yamllint .
 	cd $(ANSIBLE_DIR) && ansible-lint
-	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach tests/client/*.sh tests/bootstrap/*.sh .github/scripts/*.sh .githooks/pre-commit
+	shellcheck -x scripts/*.sh client/linux/*.sh client/linux/usbip-autoattach ansible/roles/octoprint/files/octoprint-devices tests/client/*.sh tests/bootstrap/*.sh tests/octoprint/*.sh .github/scripts/*.sh .githooks/pre-commit
 
 hooks: ## Lint before every commit (git pre-commit hook in .githooks/)
 	git config core.hooksPath .githooks

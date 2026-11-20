@@ -11,21 +11,8 @@ PublishPort={{ octoprint_port }}:80
 Volume={{ octoprint_data_dir }}:/octoprint
 # Keep the host user's dialout/video groups inside the container (needs crun).
 PodmanArgs=--group-add keep-groups
-# A leading "-" means: skip this device if it isn't plugged in.
-{% if octoprint_printer_device %}
-AddDevice=-{{ octoprint_printer_device }}:/dev/ttyACM0
-{% else %}
-AddDevice=-/dev/ttyACM0
-AddDevice=-/dev/ttyUSB0
-{% endif %}
-{% if octoprint_webcam_device %}
-AddDevice=-{{ octoprint_webcam_device }}:/dev/video0
-Environment=ENABLE_MJPG_STREAMER=true
-Environment=CAMERA_DEV=/dev/video0
-Environment="MJPG_STREAMER_INPUT={{ octoprint_mjpg_streamer_input }}"
-{% else %}
-Environment=ENABLE_MJPG_STREAMER=false
-{% endif %}
+# The printer and webcam (AddDevice, mjpg-streamer settings) are in
+# octoprint.container.d/50-devices.conf, written by octoprint-devices.
 
 [Service]
 Restart=always

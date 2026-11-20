@@ -25,37 +25,57 @@ PI_HOSTNAME=octopi scripts/configure-boot.sh /mnt/e                    # Windows
 
 Boot it on Ethernet, then check it answers: `make ping LIMIT=octopi`.
 
-## 2. Plug in the printer and find its stable path
+## 2. Plug in the printer (and the webcam, now or later)
 
-Use one of the Pi 4's black (USB 2) ports and a short cable. Then:
+Use one of the Pi 4's black (USB 2) ports and a short cable for the printer,
+and the other black port for the webcam (a Logitech C920). There is nothing to
+look up or write down: the role finds both on the Pi by itself.
 
-```bash
-ssh admin@octopi ls -l /dev/serial/by-id/ /dev/v4l/by-id/
+- **Printer**: the entry in `/dev/serial/by-id/` with `prusa` in its name (an
+  MK3S+ shows up as `usb-Prusa_Research__prusa3d.com__Original_Prusa_i3_MK3_...`),
+  or else the only entry there. Inside the container it's always `/dev/ttyACM0`,
+  so OctoPrint's auto-detect finds it.
+- **Webcam**: the `-video-index0` entry in `/dev/v4l/by-id/` with `c920`,
+  `webcam` or `camera` in its name, or else the only camera.
+
+Both are optional at `make apply` time. With no printer yet, the role says so
+and carries on; `/dev/ttyACM0` and `/dev/ttyUSB0` are passed through as soon
+as they appear. With no webcam, mjpg-streamer stays off. Plug either in later
+(or power the printer on) and a udev rule reconfigures the container and
+restarts OctoPrint within a few seconds, so you don't need to run `make apply`
+again. The `make apply` output says what it found:
+
+```
+ok: [octopi] => msg:
+  - 'Printer: /dev/serial/by-id/usb-Prusa_Research__prusa3d.com__Original_Prusa_i3_MK3_CZPX...-if00'
+  - 'Webcam: none found. Plug one in any time: OctoPrint restarts with it, no make apply needed.'
 ```
 
-Put what you find in `ansible/inventory/host_vars/octopi.yml` (create it):
+`ansible/inventory/group_vars/printers.yml` already sets the C920's stream to
+720p at 15 fps (`octoprint_mjpg_streamer_input`).
+
+### Overrides (usually not needed)
+
+Put these in `ansible/inventory/host_vars/octopi.yml` (create it) only if the
+detection picks the wrong thing, e.g. with several USB serial devices plugged in:
 
 ```yaml
 ---
-# Prusa MK3S+ (shows up as an MK3)
+# A fixed printer path instead of detection (from ls /dev/serial/by-id/).
 octoprint_printer_device: /dev/serial/by-id/usb-Prusa_Research__prusa3d.com__Original_Prusa_i3_MK3_CZPXXXXXXXXXXXXXXXX-if00
+# Or keep detecting, with your own pattern (a case-insensitive regex).
+octoprint_printer_match: "prusa|ch340"
 
-# Logitech C920 / C920 Pro (optional). Use the -video-index0 entry.
+# A fixed webcam path, or "off" to never use one.
 octoprint_webcam_device: /dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_XXXXXXXX-video-index0
-octoprint_mjpg_streamer_input: "-n -r 1280x720 -f 15"
-# Fixed focus, so timelapses and Gadget's snapshots don't blur while the
-# camera hunts. 0 is "far"; see "Lock the webcam's focus" below.
-octoprint_webcam_controls:
-  focus_automatic_continuous: 0
-  focus_absolute: 0
+octoprint_webcam_match: "c920|brio"
 ```
 
-Plug the webcam into the other black USB 2 port. A C920 Pro may list as
-`..._C920_PRO_HD_WEBCAM_...`; copy whatever `ls` shows.
+To see what it would pick right now, without changing anything:
 
-Without `octoprint_printer_device`, `/dev/ttyACM0` and `/dev/ttyUSB0` are passed
-through as they are, which also works on a Pi with one printer. Either way,
-OctoPrint sees the printer as `/dev/ttyACM0`, so its auto-detect finds it.
+```bash
+ssh admin@octopi sudo octoprint-devices show
+```
 
 ## 3. Apply
 
@@ -68,8 +88,9 @@ OctoPrint's setup wizard once (printer profile, etc.). The first start pulls
 the image, which can take a few minutes on a Pi. For the MK3S+, the serial baud rate is 115200
 (leave it on AUTO or pick it), and the print bed is 250 x 210 x 210 mm.
 
-If you set a webcam, the role already fills these in, as the image's docs
-ask, so you don't need to touch them:
+The role fills these webcam settings in, as the image's docs ask, so you
+don't need to touch them. It does so even before a camera is plugged in, so
+one plugged in later just works (until then the Control tab shows no stream):
 - Settings > Classic Webcam: Stream URL `/webcam/?action=stream`, Snapshot URL
   `http://localhost:8080/?action=snapshot`
 - Settings > Webcam & Timelapse: Path to FFMPEG `/usr/bin/ffmpeg`
@@ -131,8 +152,7 @@ installs it; linking it to your account is a one-time step only you can do:
    preview shows the bed, and that Gadget is on for this printer.
 4. Run `make octoprint-backup`, so a rebuild comes back already linked.
 
-Gadget looks at the snapshot URL above, so it needs `octoprint_webcam_device`
-set. The plugin's key is in OctoPrint's `config.yaml`, which the backup
+Gadget looks at the snapshot URL above, so it needs the webcam plugged in. The plugin's key is in OctoPrint's `config.yaml`, which the backup
 contains: anyone with that tarball can reach your printer, so keep it safe
 (it's already git-ignored). To unlink, remove the printer on octoeverywhere.com.
 
@@ -173,14 +193,21 @@ Things to know:
 
 ### Lock the webcam's focus
 
-With `octoprint_webcam_controls` set, a udev rule runs `v4l2-ctl` each time
-the camera appears (boot, replug), and `make apply` sets them right away. To
-find the focus value that makes the bed sharp, try a few live while watching
-the stream, then put the best one in `host_vars/octopi.yml`:
+With `octoprint_webcam_controls` set, `octoprint-devices` runs `v4l2-ctl`
+for each control every time the camera appears (boot, replug) and on every
+`make apply`. To find the focus value that makes the bed sharp, try a few
+live while watching the stream, then put the best one in
+`host_vars/octopi.yml`:
+
+```yaml
+octoprint_webcam_controls:
+  focus_automatic_continuous: 0
+  focus_absolute: 40   # 0 = far
+```
 
 ```bash
 ssh admin@octopi
-cam=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_XXXXXXXX-video-index0
+cam=$(ls /dev/v4l/by-id/*-video-index0)
 v4l2-ctl -d $cam -l | grep -i focus               # names and ranges
 v4l2-ctl -d $cam --set-ctrl=focus_automatic_continuous=0
 v4l2-ctl -d $cam --set-ctrl=focus_absolute=40     # 0-255, in steps of 5
@@ -213,23 +240,36 @@ overwrites an existing config.
 
 CI already runs both roles in an arm64 Debian container (`make molecule
 ROLE=octoprint` locally): it installs everything, starts OctoPrint, checks a
-second run changes nothing, and writes to a fake serial port from inside the
-container. It also installs OctoEverywhere, checks OctoPrint loads it, checks
-the webcam snapshot URL is set, and checks the udev rule for a fake C920.
+second run changes nothing. It first runs with nothing plugged in (OctoPrint
+must start, with mjpg-streamer off), then plugs in a fake Prusa and C920 the
+way udev would and checks OctoPrint restarts with both, and can write to them
+from inside the container. The lint job also runs the detection script against
+fake `/dev` trees (`tests/octoprint/test-devices.sh`): Prusa preferred over
+other serial adapters, overrides, webcam off, restarts only when needed.
+Molecule also installs OctoEverywhere, checks OctoPrint loads it, and checks
+the webcam snapshot URL is set.
 It installs the pinned Firmware Updater, checks it loads with the MK3S+
 profile selected and that avrdude knows the ATmega2560 and `wiring`; and it
 checks the generated admin can log in while a visitor can no longer create an
 admin through the setup wizard. These are the things only the real printer
 can prove:
 
+- [ ] With the printer plugged in and the webcam not, `make apply` prints
+      `Printer: /dev/serial/by-id/usb-Prusa_Research_...` and `Webcam: none found`
 - [ ] `make check LIMIT=octopi` shows no changes right after `make apply`
 - [ ] <http://octopi> loads after a reboot of the Pi (linger works)
 - [ ] OctoPrint's Connection panel lists `/dev/ttyACM0`, and **Connect** gets the
       printer's firmware info in the Terminal tab (serial access works)
 - [ ] Turn the printer off and on: within a minute OctoPrint restarts and can
-      connect again (`sudo journalctl -u octoprint-replug -n 5` shows it ran)
+      connect again (`sudo journalctl -u 'octoprint-replug@*' -n 5` shows it ran)
 - [ ] Unplug and replug the USB cable while idle: same result
-- [ ] If you have a webcam: the Control tab shows the stream
+- [ ] Plug the C920 in (no `make apply`): within a minute OctoPrint restarts
+      and the Control tab shows the stream. `sudo cat
+      ~pods/.config/containers/systemd/octoprint.container.d/50-devices.conf`
+      lists it under `/dev/v4l/by-id/`
+- [ ] Unplug and replug the C920 while a print runs: the stream comes back
+      and the print keeps going (OctoPrint isn't restarted, since nothing
+      changed)
 - [ ] Webcam snapshot works: <http://octopi/webcam/?action=snapshot>
       shows a still
 - [ ] Focus is locked: `v4l2-ctl -d <camera> -C focus_automatic_continuous`
@@ -248,7 +288,7 @@ can prove:
       printer now (LCD > Support shows it). The log shows avrdude writing and
       verifying, OctoPrint reconnects by itself, the LCD shows the same
       version, and a short test print works
-- [ ] During that flash, `sudo journalctl -u octoprint-replug -f` stays quiet
+- [ ] During that flash, `sudo journalctl -u 'octoprint-replug@*' -f` stays quiet
       (the printer's USB link stays up, so OctoPrint isn't restarted mid-flash)
 - [ ] `make octoprint-backup` creates `backups/octoprint/latest.tar.gz`
 
@@ -261,11 +301,12 @@ can prove:
 | Serial access | `pods` is in `dialout` and `video`, and the unit passes `--group-add keep-groups` so the container keeps those groups. The container runs as root inside its user namespace, which is `pods` on the host, so the data dir needs no `:U` or `keep-id` |
 | Port 80 | `net.ipv4.ip_unprivileged_port_start=80` lets the rootless container bind it. Set `octoprint_port: 5000` to avoid that |
 | Plugins | `pip install <url>` via `podman exec`. The image sets `PIP_USER` and `PYTHONUSERBASE=/octoprint/plugins`, so they land in the data dir and survive image updates. The role checks with `pip show <name>` first, so it only installs what's missing |
+| Device detection | `/usr/local/sbin/octoprint-devices` (settings in `/etc/default/octoprint-devices`) picks the printer from `/dev/serial/by-id/` and the webcam from `/dev/v4l/by-id/`, and writes them into the Quadlet drop-in `~pods/.config/containers/systemd/octoprint.container.d/50-devices.conf` as `AddDevice` lines, plus mjpg-streamer's settings when there is a camera. `make apply` runs it, and so does udev on every plug-in (below) |
 | Webcam settings | `octoprint config set` inside the container, after OctoPrint is up, then a restart. Only the stream URL, snapshot URL and FFMPEG path are managed |
-| Webcam controls | `/etc/udev/rules.d/70-octoprint.rules` matches the camera by the serial number in its `by-id` name and runs `v4l2-ctl` for each control |
+| Webcam controls | `octoprint-devices` runs `v4l2-ctl` for each control whenever the camera appears and on `make apply` |
 | Admin login | If `users.yaml` has no active admin, `octoprint user add --admin` inside the container (password on stdin, from `octoprint_admin_password`, by default a random one kept in `secrets/`), then a restart so the server loads it. Also keeps `accessControl.autologinLocal` false |
 | Firmware Updater | Installed like any plugin, pinned to a release tag. When it has no profile with a flash method, the role writes `octoprint_firmwareupdater_profile` with `octoprint config set` (plus the plugin's settings version, so its first-load migration doesn't replace it). The role first checks the image has the profile's `avrdude_path` |
-| Printer power-cycles | Quadlet only passes a device that exists when the unit is generated, and a running container never sees new devices. A udev rule starts `octoprint-replug.service` whenever a USB serial port (or webcam) appears, which regenerates the unit and restarts OctoPrint if it is running |
+| Plugging in later | Quadlet only passes a device that exists when the unit is generated, and a running container never sees new devices. `/etc/udev/rules.d/70-octoprint.rules` starts `octoprint-replug@tty.service` when a USB serial port appears and `octoprint-replug@video.service` when a camera does. Both rerun `octoprint-devices`, which regenerates the unit; a serial port always restarts OctoPrint (if running), a camera only when the drop-in changed, so replugging the same camera mid-print doesn't stop the print |
 
 Useful commands on the Pi:
 
