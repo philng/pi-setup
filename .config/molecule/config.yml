@@ -22,6 +22,9 @@ platforms:
 provisioner:
   name: ansible
   env:
+    # One `docker exec` per task instead of several (mkdir, copy the module,
+    # run it, clean up): roughly halves the time each task takes.
+    ANSIBLE_PIPELINING: "True"
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..
     ANSIBLE_COLLECTIONS_PATH: ${MOLECULE_PROJECT_DIRECTORY}/../../.collections:~/.ansible/collections
   config_options:

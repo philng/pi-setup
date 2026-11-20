@@ -35,8 +35,8 @@
         status_code: [200, 302]
       register: octoprint_verify_http
       until: octoprint_verify_http.status in [200, 302]
-      retries: 60
-      delay: 5
+      retries: 300
+      delay: 1
 
     - name: Check the printer port was passed through and is writable
       become: true
@@ -65,8 +65,8 @@
         status_code: [200, 302]
       register: octoprint_verify_http_again
       until: octoprint_verify_http_again.status in [200, 302]
-      retries: 60
-      delay: 5
+      retries: 300
+      delay: 1
 
     - name: Check the OctoEverywhere plugin is installed in the data dir
       become: true
@@ -90,8 +90,8 @@
       register: octoprint_verify_oe_loaded
       changed_when: false
       until: octoprint_verify_oe_loaded.rc == 0
-      retries: 24
-      delay: 5
+      retries: 120
+      delay: 1
 
     - name: Read the webcam snapshot URL OctoPrint (and Gadget) will use
       become: true
@@ -137,8 +137,8 @@
       register: octoprint_verify_fwu_loaded
       changed_when: false
       until: octoprint_verify_fwu_loaded.rc == 0
-      retries: 24
-      delay: 5
+      retries: 120
+      delay: 1
 
     # Read after the plugin has loaded, so this also shows its first-load
     # settings migration didn't replace the profile.

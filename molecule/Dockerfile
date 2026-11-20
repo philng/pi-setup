@@ -4,6 +4,14 @@
 # Built by `make molecule` and in CI as pi-setup-molecule:trixie.
 FROM docker.io/library/debian:trixie
 ENV container=docker DEBIAN_FRONTEND=noninteractive
+# Faster package installs, for the roles' apt tasks too: no fsync after each
+# file (the container is thrown away), no docs or man pages, no translations.
+# Nothing the roles do or check depends on these.
+RUN echo force-unsafe-io > /etc/dpkg/dpkg.cfg.d/90-unsafe-io \
+ && printf '%s\n' 'path-exclude=/usr/share/doc/*' 'path-include=/usr/share/doc/*/copyright' \
+      'path-exclude=/usr/share/man/*' 'path-exclude=/usr/share/info/*' > /etc/dpkg/dpkg.cfg.d/90-nodoc \
+ && echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90-no-translations \
+ && echo 'man-db man-db/auto-update boolean false' | debconf-set-selections
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       systemd systemd-sysv libpam-systemd dbus udev python3 sudo ca-certificates curl procps iproute2 \

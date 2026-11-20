@@ -134,8 +134,8 @@
     status_code: [200, 302]
   register: octoprint_up
   until: octoprint_up.status in [200, 302]
-  retries: 60
-  delay: 5
+  retries: 300
+  delay: 1
   check_mode: false
 
 # Until OctoPrint has an admin, anyone who can reach it can run the setup
@@ -192,8 +192,8 @@
         status_code: [200, 302]
       register: octoprint_up_again
       until: octoprint_up_again.status in [200, 302]
-      retries: 60
-      delay: 5
+      retries: 300
+      delay: 1
 
     - name: Say where the admin password is
       ansible.builtin.debug:
