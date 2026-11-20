@@ -166,15 +166,46 @@
 
 # Everything below talks to the running container. Wait until OctoPrint has
 # started and written its config, so it doesn't overwrite what we set.
+# A Pi's very first start (config, plugin scan, on an SD card) can take
+# several minutes, and haproxy answers 503 until OctoPrint is up. So wait up
+# to 15 minutes, and if that's not enough, show why instead of just timing out.
 - name: Wait for OctoPrint to finish starting
-  ansible.builtin.uri:
-    url: http://localhost:{{ octoprint_port }}/
-    status_code: [200, 302]
-  register: octoprint_up
-  until: octoprint_up.status in [200, 302]
-  retries: 300
-  delay: 1
   check_mode: false
+  block:
+    - name: Wait for OctoPrint's web UI
+      ansible.builtin.uri:
+        url: http://localhost:{{ octoprint_port }}/
+        status_code: [200, 302]
+        timeout: 10
+      register: octoprint_up
+      until: octoprint_up.status in [200, 302]
+      retries: "{{ octoprint_start_retries }}"
+      delay: 2
+  rescue:
+    - name: Collect the service state and container log  # noqa: command-instead-of-module
+      become: true
+      become_user: "{{ podman_user }}"
+      environment: "{{ podman_user_env }}"
+      ansible.builtin.shell: |
+        systemctl --user status octoprint.service --no-pager -l --lines 0
+        echo; podman ps -a
+        echo; podman logs --tail 40 octoprint
+      args:
+        chdir: /
+      register: octoprint_start_debug
+      changed_when: false
+      failed_when: false
+
+    - name: Fail with what OctoPrint was doing
+      ansible.builtin.fail:
+        msg:
+          - >-
+            OctoPrint didn't answer on http://localhost:{{ octoprint_port }}/ within
+            {{ (octoprint_start_retries | int * 2 / 60) | round | int }} minutes.
+            Last answer: {{ octoprint_up.status | default('none') }}
+            {{ octoprint_up.msg | default('') }}.
+            If the log below shows it still starting, run make apply again.
+          - "{{ octoprint_start_debug.stdout_lines | default([]) }}"
 
 # Until OctoPrint has an admin, anyone who can reach it can run the setup
 # wizard and become admin. Close that before anything else.
@@ -228,10 +259,11 @@
       ansible.builtin.uri:
         url: http://localhost:{{ octoprint_port }}/
         status_code: [200, 302]
+        timeout: 10
       register: octoprint_up_again
       until: octoprint_up_again.status in [200, 302]
-      retries: 300
-      delay: 1
+      retries: "{{ octoprint_start_retries }}"
+      delay: 2
 
     - name: Say where the admin password is
       ansible.builtin.debug:
