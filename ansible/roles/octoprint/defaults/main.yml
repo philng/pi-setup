@@ -1,7 +1,11 @@
 ---
 # Official image: https://github.com/OctoPrint/octoprint-docker
-# Pin a version (e.g. docker.io/octoprint/octoprint:1.11) to control upgrades.
-octoprint_image: docker.io/octoprint/octoprint:latest
+# Pinned to the 1.11 series: podman-auto-update still pulls its patch
+# releases (1.11.x) every day, and rolls back if one fails to start, but a
+# new minor or major version (2.0) only comes when you change this.
+# The official image is built on Python 3.10, so OctoPrint shows a "Python
+# 3.10 is past its end of life" notice; OctoPrint 2.0.x still supports it.
+octoprint_image: docker.io/octoprint/octoprint:1.11
 
 # Host port for the web UI. The container listens on 80 (haproxy in front of
 # OctoPrint and the webcam stream). Below 1024 the role lets rootless

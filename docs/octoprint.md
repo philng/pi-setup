@@ -297,7 +297,7 @@ can prove:
 | Piece | What it does |
 | --- | --- |
 | `podman` role | Installs Podman, crun and pasta; creates the rootless user `pods` with linger so its containers start at boot; turns on `podman-auto-update.timer` (daily image updates, rolled back if the new one fails) |
-| `octoprint.container` | Quadlet unit in `~pods/.config/containers/systemd/`, which becomes the user service `octoprint.service`. Image `docker.io/octoprint/octoprint`, data in `~pods/octoprint` mounted at `/octoprint`, port 80 |
+| `octoprint.container` | Quadlet unit in `~pods/.config/containers/systemd/`, which becomes the user service `octoprint.service`. Image `docker.io/octoprint/octoprint:1.11` (`octoprint_image`): daily auto-updates stay within 1.11.x; change the tag for 2.0. The official image runs Python 3.10, hence OctoPrint's "past its end of life" notice, which is harmless until a release drops 3.10 (2.0.x still supports it), data in `~pods/octoprint` mounted at `/octoprint`, port 80 |
 | Serial access | `pods` is in `dialout` and `video`, and the unit passes `--group-add keep-groups` so the container keeps those groups. The container runs as root inside its user namespace, which is `pods` on the host, so the data dir needs no `:U` or `keep-id` |
 | Port 80 | Published on IPv4 only: the image's haproxy listens on IPv4 only, so forwarding IPv6 would only give resets. `net.ipv4.ip_unprivileged_port_start=80` lets the rootless container bind it. Set `octoprint_port: 5000` to avoid that |
 | Plugins | `pip install <url>` via `podman exec`. The image sets `PIP_USER` and `PYTHONUSERBASE=/octoprint/plugins`, so they land in the data dir and survive image updates. The role checks with `pip show <name>` first, so it only installs what's missing |
