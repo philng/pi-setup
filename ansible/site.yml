@@ -19,6 +19,22 @@
         fail_msg: >-
           Expected Raspberry Pi OS Lite 64-bit, got
           {{ ansible_facts['distribution'] }} {{ ansible_facts['architecture'] }}.
+
+    # A dry run of a Pi's first apply fails part-way (services that its packages
+    # would install don't exist yet), so stop with a clear message instead. The
+    # Pi drops out of the rest of the run; other Pis are checked as usual.
+    - name: Look for a previous make apply
+      ansible.builtin.stat:
+        path: /var/lib/pi-setup-applied
+      register: pis_applied
+      when: ansible_check_mode
+
+    - name: Refuse a dry run of a Pi that has never been configured
+      ansible.builtin.fail:
+        msg: >-
+          {{ inventory_hostname }} has never been configured by make apply, so a
+          dry run has nothing to compare against. Run: make apply LIMIT={{ inventory_hostname }}
+      when: ansible_check_mode and not pis_applied.stat.exists
   roles:
     - base
 

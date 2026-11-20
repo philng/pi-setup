@@ -99,7 +99,7 @@ ping: deps ## Check the Pis are reachable over SSH
 apply: deps ## Configure the Pis
 	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook site.yml $(LIMIT_ARG)
 
-check: deps ## Dry run with diff
+check: deps ## Dry run with diff (a Pi needs one real make apply first)
 	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook site.yml --check --diff $(LIMIT_ARG)
 
 health: deps ## Read-only health report (fails if something needs attention)

@@ -99,7 +99,8 @@ into the repo's `.venv/` the first time (needs Docker or Podman, see
 
 What CI can't prove, because it needs your hardware:
 
-1. `make check` shows what would change, then `make apply`. Run `make apply`
+1. `make check` shows what would change, then `make apply`. (On a Pi that has never had
+   a `make apply`, `make check` stops and tells you to apply first.) Run `make apply`
    a second time: it should report `changed=0`.
 2. `ssh admin@pilab sudo reboot` (applies the bootloader setting), then
    `make ping` works again.

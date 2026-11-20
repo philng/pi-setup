@@ -4,6 +4,15 @@
   become: true
   gather_facts: false
   tasks:
+    - name: Read the "configured" marker
+      ansible.builtin.stat:
+        path: /var/lib/pi-setup-applied
+      register: base_verify_marker
+
+    - name: Marker exists, so make check will accept this Pi
+      ansible.builtin.assert:
+        that: base_verify_marker.stat.exists
+
     - name: Read live firewall table
       ansible.builtin.command: nft list table inet pilab
       register: base_verify_nft

@@ -20,3 +20,13 @@
 - name: Bootloader EEPROM
   ansible.builtin.import_tasks: eeprom.yml
   when: base_manage_eeprom | bool
+
+# site.yml looks for this before a dry run (make check): a Pi that has never
+# had a real `make apply` has nothing to compare against, so it stops there.
+- name: Record that this Pi has been configured
+  ansible.builtin.copy:
+    dest: /var/lib/pi-setup-applied
+    content: "Configured by pi-setup (make apply). Remove to make `make check` refuse this Pi.\n"
+    owner: root
+    group: root
+    mode: "0644"
