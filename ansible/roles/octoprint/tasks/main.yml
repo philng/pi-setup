@@ -166,21 +166,21 @@
 
 # Everything below talks to the running container. Wait until OctoPrint has
 # started and written its config, so it doesn't overwrite what we set.
-# A Pi's very first start (config, plugin scan, on an SD card) can take
-# several minutes, and haproxy answers 503 until OctoPrint is up. So wait up
-# to 15 minutes, and if that's not enough, show why instead of just timing out.
+# Ask 127.0.0.1: the port is published on IPv4 only (see the unit), and
+# localhost can be ::1 first.
+# If OctoPrint still doesn't answer, show why instead of just timing out.
 - name: Wait for OctoPrint to finish starting
   check_mode: false
   block:
     - name: Wait for OctoPrint's web UI
       ansible.builtin.uri:
-        url: http://localhost:{{ octoprint_port }}/
+        url: http://127.0.0.1:{{ octoprint_port }}/
         status_code: [200, 302]
         timeout: 10
       register: octoprint_up
       until: octoprint_up.status in [200, 302]
       retries: "{{ octoprint_start_retries }}"
-      delay: 2
+      delay: 1
   rescue:
     - name: Collect the service state and container log  # noqa: command-instead-of-module
       become: true
@@ -200,8 +200,8 @@
       ansible.builtin.fail:
         msg:
           - >-
-            OctoPrint didn't answer on http://localhost:{{ octoprint_port }}/ within
-            {{ (octoprint_start_retries | int * 2 / 60) | round | int }} minutes.
+            OctoPrint didn't answer on http://127.0.0.1:{{ octoprint_port }}/ within
+            {{ (octoprint_start_retries | int / 60) | round | int }} minutes.
             Last answer: {{ octoprint_up.status | default('none') }}
             {{ octoprint_up.msg | default('') }}.
             If the log below shows it still starting, run make apply again.
@@ -257,13 +257,13 @@
 
     - name: Wait for OctoPrint to come back
       ansible.builtin.uri:
-        url: http://localhost:{{ octoprint_port }}/
+        url: http://127.0.0.1:{{ octoprint_port }}/
         status_code: [200, 302]
         timeout: 10
       register: octoprint_up_again
       until: octoprint_up_again.status in [200, 302]
       retries: "{{ octoprint_start_retries }}"
-      delay: 2
+      delay: 1
 
     - name: Say where the admin password is
       ansible.builtin.debug:

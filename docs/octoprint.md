@@ -299,7 +299,7 @@ can prove:
 | `podman` role | Installs Podman, crun and pasta; creates the rootless user `pods` with linger so its containers start at boot; turns on `podman-auto-update.timer` (daily image updates, rolled back if the new one fails) |
 | `octoprint.container` | Quadlet unit in `~pods/.config/containers/systemd/`, which becomes the user service `octoprint.service`. Image `docker.io/octoprint/octoprint`, data in `~pods/octoprint` mounted at `/octoprint`, port 80 |
 | Serial access | `pods` is in `dialout` and `video`, and the unit passes `--group-add keep-groups` so the container keeps those groups. The container runs as root inside its user namespace, which is `pods` on the host, so the data dir needs no `:U` or `keep-id` |
-| Port 80 | `net.ipv4.ip_unprivileged_port_start=80` lets the rootless container bind it. Set `octoprint_port: 5000` to avoid that |
+| Port 80 | Published on IPv4 only: the image's haproxy listens on IPv4 only, so forwarding IPv6 would only give resets. `net.ipv4.ip_unprivileged_port_start=80` lets the rootless container bind it. Set `octoprint_port: 5000` to avoid that |
 | Plugins | `pip install <url>` via `podman exec`. The image sets `PIP_USER` and `PYTHONUSERBASE=/octoprint/plugins`, so they land in the data dir and survive image updates. The role checks with `pip show <name>` first, so it only installs what's missing |
 | Device detection | `/usr/local/sbin/octoprint-devices` (settings in `/etc/default/octoprint-devices`) picks the printer from `/dev/serial/by-id/` and the webcam from `/dev/v4l/by-id/`, and writes them into the Quadlet drop-in `~pods/.config/containers/systemd/octoprint.container.d/50-devices.conf` as `AddDevice` lines, plus mjpg-streamer's settings when there is a camera. `make apply` runs it, and so does udev on every plug-in (below) |
 | Webcam settings | `octoprint config set` inside the container, after OctoPrint is up, then a restart. Only the stream URL, snapshot URL and FFMPEG path are managed |
@@ -331,8 +331,9 @@ sudo journalctl -u 'octoprint-replug@*'              # plug-in events (none yet:
   on, use a different USB cable (many thin ones only carry power), and try
   the other black USB 2 port. As soon as it appears, OctoPrint restarts with it.
 - **<http://octopi> doesn't load, but the service is active:** try
-  `curl -sI http://octopi` from your computer and `curl -sI http://localhost`
-  on the Pi. If it works on the Pi but not from your computer, check that
+  `curl -sI http://octopi` from your computer and `curl -sI http://127.0.0.1`
+  on the Pi (the port is published on IPv4 only, so not `localhost`, which
+  can mean IPv6). If it works on the Pi but not from your computer, check that
   your computer's address is in `base_lan_cidrs_v4` (the firewall allows
   port 80 from the LAN only), or use the Pi's Tailscale name.
 
