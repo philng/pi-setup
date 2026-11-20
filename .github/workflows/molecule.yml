@@ -51,28 +51,28 @@ jobs:
       # Build the test image while Python and collections install.
       - name: Start building the Molecule test image
         run: (make molecule-image > "$RUNNER_TEMP/image.log" 2>&1; echo $? > "$RUNNER_TEMP/image.rc") &
-      - uses: actions/setup-python@v5
+      # The same tools as `make deps-dev` locally: Python and uv from mise.toml,
+      # Python packages from requirements-dev.txt.
+      - uses: jdx/mise-action@v3
+        env:
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: .github/workflows/molecule.yml
-      - run: pip install ansible-core molecule "molecule-plugins[docker]" docker
+          version: 2026.11.10
+          cache: true
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements*.txt') }}
       # Refreshed weekly, so new collection releases still get tested.
       - id: week
         run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
       - name: Cache Ansible collections
-        id: collections
         uses: actions/cache@v4
         with:
-          path: |
-            ansible/.collections
-            ~/.ansible/collections
-          key: collections-molecule-${{ steps.week.outputs.week }}-${{ hashFiles('ansible/requirements.yml') }}
-      - name: Install Ansible collections
-        if: steps.collections.outputs.cache-hit != 'true'
-        run: |
-          make deps
-          ansible-galaxy collection install community.docker
+          path: ansible/.collections
+          key: collections-v2-molecule-${{ steps.week.outputs.week }}-${{ hashFiles('ansible/requirements.yml') }}
+      - run: make deps-dev
       - name: Wait for the test image
         run: |
           while [ ! -f "$RUNNER_TEMP/image.rc" ]; do sleep 1; done

@@ -6,3 +6,4 @@ ansible/.collections/
 backups/
 .ansible/
 secrets/
+.venv/

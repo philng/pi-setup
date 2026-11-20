@@ -28,13 +28,37 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 ```bash
 scripts/configure-boot.sh /run/media/$USER/bootfs   # first-boot settings (macOS: /Volumes/bootfs,
                                                      # Windows: /mnt/e in WSL)
-make deps                                            # once: Ansible collections
 make ping && make apply                              # after the Pi boots
 ```
 
 The `make` commands run on **your own computer** (Linux, macOS, or WSL on Windows),
 never on the Pi: Ansible connects to the Pis over SSH. On Windows, follow
 [docs/windows.md](docs/windows.md) to set up WSL first.
+
+### Tools on your computer
+
+You need `git`, `make` and [mise](https://mise.jdx.dev). Nothing else is installed
+globally. The first `make` target that needs Ansible runs `mise install`, which gets
+the Python and uv versions pinned in `mise.toml`. It then creates `.venv/` in the repo
+with the exact Ansible versions locked in `requirements.txt`, plus the Ansible
+collections in `ansible/.collections/`. Your laptop, WSL and CI all run the same
+versions. `make` uses them without you activating anything. Run `make deps` to set
+everything up ahead of time.
+
+| Computer | Install once |
+| --- | --- |
+| Fedora Atomic (Silverblue, Sway Atomic, ...) | `git` and `make` are on the host. `curl https://mise.run \| sh` installs mise to `~/.local/bin`, so you don't need layering or a toolbox. Run `make` on the host, not in a toolbox, so the Molecule tests can reach Podman |
+| Other Linux | `git`, `make` and `curl` from your package manager, then the mise line above |
+| macOS | `xcode-select --install` (git, make), then `brew install mise` |
+| Windows | In WSL: see [docs/windows.md](docs/windows.md) |
+
+Optional: [activate mise in your shell](https://mise.jdx.dev/getting-started.html#activate-mise)
+and run `mise trust` once in the repo. After that, `cd`-ing into the repo activates
+`.venv`, so `ansible`, `ansible-lint` and `molecule` work directly too.
+
+To move to a newer Ansible, edit the version in `requirements.in` (or the dev tools in
+`requirements-dev.in`), run `make lock`, and commit both files. For Python or uv, edit
+`mise.toml`. Everyone's next `make` picks up the change.
 
 See [docs/01-base-image.md](docs/01-base-image.md) for the details. Each Pi has its own
 hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
@@ -76,11 +100,11 @@ Day to day: `make apply` after changing anything, `make health` to check on the 
 
 ## Testing before you push
 
-CI minutes are limited on a private repo, so catch failures locally first:
+Catch failures locally before CI does. `make lint` and `make test` add the pinned
+ansible-lint, yamllint, shellcheck and Molecule (`requirements-dev.txt`) to `.venv`
+the first time (or run `make deps-dev`); CI installs the same versions.
 
 ```bash
-pip install ansible-core ansible-lint yamllint shellcheck-py molecule "molecule-plugins[docker]" docker
-make deps && ansible-galaxy collection install community.docker   # once
 make hooks                                  # once: run `make lint` before every commit
 make test ROLE=base                         # lint, then one role's Molecule test
 make test                                   # lint, then every role

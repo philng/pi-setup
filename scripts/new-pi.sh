@@ -210,19 +210,16 @@ next_steps() {
   local user=$1 addr=$2
   step "Next: configure it with Ansible"
   say "These run here on your computer too; Ansible connects to the Pi over SSH."
-  say "  make deps                  # once per computer"
-  say "  make ping LIMIT=$HOST"
+  say "  make ping LIMIT=$HOST       # installs the pinned Ansible the first time"
   say "  make apply LIMIT=$HOST"
   say "Log in by hand any time with: ssh $user@$addr"
-  if [[ $YES -eq 0 ]] && command -v ansible-playbook >/dev/null; then
-    if confirm "Run them now?" Y; then
-      cd "$REPO_ROOT"
-      [[ -d ansible/.collections ]] || make --no-print-directory deps
-      make --no-print-directory ping LIMIT="$HOST"
-      make --no-print-directory apply LIMIT="$HOST"
-    fi
-  elif ! command -v ansible-playbook >/dev/null; then
-    say "(Ansible isn't installed here yet: see docs/01-base-image.md, or docs/windows.md in WSL.)"
+  if ! command -v mise >/dev/null; then
+    say "(First install mise, which sets up the Python and uv that install Ansible:"
+    say "   curl https://mise.run | sh    or on macOS: brew install mise)"
+  elif [[ $YES -eq 0 ]] && confirm "Run them now?" Y; then
+    cd "$REPO_ROOT"
+    make --no-print-directory ping LIMIT="$HOST"
+    make --no-print-directory apply LIMIT="$HOST"
   fi
 }
 

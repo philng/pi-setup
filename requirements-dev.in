@@ -1,0 +1,9 @@
+# What `make deps-dev` adds for linting and the Molecule tests.
+# Edit here, then run `make lock` to update requirements-dev.txt.
+-c requirements.txt
+ansible-lint==26.11.0
+yamllint==1.38.0
+shellcheck-py==0.11.0.1
+molecule==26.11.0
+molecule-plugins[docker]==26.11.0
+docker==7.2.0

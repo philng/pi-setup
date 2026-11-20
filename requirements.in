@@ -1,0 +1,4 @@
+# What `make deps` installs into .venv: the Ansible that configures the Pis.
+# Edit here, then run `make lock` to update requirements.txt (the exact
+# versions everyone, and CI, gets).
+ansible-core==2.22.0

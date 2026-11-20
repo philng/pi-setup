@@ -14,8 +14,9 @@ After that, Ansible does the rest.
 - This repo checked out on that computer
 - An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519`, or let
   `make new-pi` create one; on Windows, in WSL)
-- To run Ansible afterwards: Linux or macOS with `ansible-core` (`pipx install
-  ansible-core`, `brew install ansible`, or a toolbox on Fedora Atomic). On Windows,
+- To run Ansible afterwards: `git`, `make` and [mise](https://mise.jdx.dev) on
+  Linux or macOS (see [Tools on your computer](../README.md#tools-on-your-computer));
+  `make` installs the pinned Ansible into the repo's `.venv/` itself. On Windows,
   everything except Imager runs in WSL: set that up first with [Windows (WSL)](windows.md).
   All `make` commands run on this computer, never on the Pi.
 
@@ -126,8 +127,7 @@ runs on first boot only). Then, from the repo on your computer (on Windows, in t
 WSL Ubuntu window, see [windows.md](windows.md)):
 
 ```bash
-make deps   # once
-make ping   # expect: pilab | SUCCESS => "ping": "pong"
+make ping   # first run installs Ansible into .venv/. Expect: pilab | SUCCESS => "ping": "pong"
 ```
 
 ### How your computer finds the Pis

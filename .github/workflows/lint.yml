@@ -24,23 +24,30 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # The same tools as `make deps-dev` locally: Python and uv from mise.toml,
+      # Python packages from requirements-dev.txt.
+      - uses: jdx/mise-action@v3
+        env:
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: .github/workflows/lint.yml
-      - run: pip install ansible-core ansible-lint yamllint shellcheck-py
+          version: 2026.11.10
+          cache: true
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements*.txt') }}
       # Refreshed weekly, so new collection releases still get tested.
       - id: week
         run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
       - name: Cache Ansible collections
-        id: collections
         uses: actions/cache@v4
         with:
           path: ansible/.collections
-          key: collections-lint-${{ steps.week.outputs.week }}-${{ hashFiles('ansible/requirements.yml') }}
-      - if: steps.collections.outputs.cache-hit != 'true'
-        run: make deps
+          key: collections-v2-lint-${{ steps.week.outputs.week }}-${{ hashFiles('ansible/requirements.yml') }}
+      - run: make deps-dev
+      # The script tests below check YAML with python3, so use .venv's (it has PyYAML).
+      - run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: make lint
       - name: Client auto-attach tests
         run: tests/client/test-autoattach.sh
