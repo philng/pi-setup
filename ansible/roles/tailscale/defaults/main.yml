@@ -12,17 +12,15 @@ tailscale_apt_key_checksum: "sha256:3e03dacf222698c60b8e2f990b809ca1b3e104de1277
 # security updates). false: update Tailscale only when you choose to.
 tailscale_auto_update: true
 
-# The auth key that joins a Pi to your tailnet, used only while the Pi is
-# logged out. First found wins:
-#   1. tailscale_authkey set in your inventory (vault it), or
-#   2. the TAILSCALE_AUTHKEY environment variable on your computer, or
-#   3. the file below on your computer (secrets/ is git-ignored).
-# No key: the Pi is set up but not joined, and make apply says so (no failure).
-tailscale_authkey_file: "{{ playbook_dir }}/../secrets/tailscale-authkey"
-tailscale_authkey: >-
-  {{ lookup('ansible.builtin.env', 'TAILSCALE_AUTHKEY')
-     or (lookup('ansible.builtin.file', tailscale_authkey_file) | trim
-         if tailscale_authkey_file is file else '') }}
+# Joining the tailnet, only while a Pi is logged out (a Pi already in your
+# tailnet is left alone): make apply prints Tailscale's login link for the Pi
+# and waits this many seconds for you to open it and approve. 0: print the link
+# and carry on; the Pi joins whenever you open it.
+tailscale_login_wait: 300
+
+# Optional, for runs nobody watches: an auth key (TAILSCALE_AUTHKEY on your
+# computer) joins without the link. Never commit one.
+tailscale_authkey: "{{ lookup('ansible.builtin.env', 'TAILSCALE_AUTHKEY') }}"
 
 # The Pi's name in the tailnet (and in MagicDNS: ssh admin@octopi).
 tailscale_hostname: "{{ inventory_hostname }}"
