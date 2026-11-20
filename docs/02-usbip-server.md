@@ -1,7 +1,8 @@
 # Step 2: Base setup and USB/IP server
 
 `make apply` now configures every Pi with the **base** role, and the USB/IP Pi
-(`pilab`, group `usbip`) with the **usbip** role.
+(`pilab`, group `usbip`) with the **usbip** role. The `usbip` group ships empty:
+`make new-pi --role usbip` adds `pilab` to it when you set that Pi up.
 
 ## What the base role does (every Pi)
 
@@ -98,7 +99,8 @@ into the repo's `.venv/` the first time (needs Docker or Podman, see
 
 What CI can't prove, because it needs your hardware:
 
-1. `make check` shows what would change, then `make apply`. Run `make apply`
+1. `make check` shows what would change, then `make apply`. (On a Pi that has never had
+   a `make apply`, `make check` stops and tells you to apply first.) Run `make apply`
    a second time: it should report `changed=0`.
 2. `ssh admin@pilab sudo reboot` (applies the bootloader setting), then
    `make ping` works again.

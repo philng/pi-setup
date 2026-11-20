@@ -78,7 +78,7 @@ From `~/pi-setup` in Ubuntu, the same commands as on Linux or macOS:
 
 ```bash
 make deps                   # optional: install Ansible now (otherwise the next line does)
-make ping                   # expect: pilab | SUCCESS => "ping": "pong"
+make ping                   # expect: <each Pi> | SUCCESS => "ping": "pong"
 make apply                  # configure every Pi
 make apply LIMIT=octopi     # or just one
 ```
@@ -91,7 +91,7 @@ The repo uses plain hostnames, which WSL looks up through Windows and your route
 so `make ping` normally just works. `.local` names usually don't resolve in WSL,
 which is why the repo doesn't use them. If `make ping` fails with
 `Could not resolve hostname`, find each Pi's IP address on your router's device
-list, then in `ansible/inventory/hosts.yml` replace `pilab` (and `octopi`) after
+list, then in `ansible/inventory/hosts.yml` replace each hostname after
 `ansible_host:` with the IP, for example `ansible_host: 192.168.1.50`. Either way,
 give each Pi a DHCP reservation on your router so the address never changes.
 
