@@ -31,13 +31,14 @@ window.
 
 ```bash
 sudo apt update
-sudo apt install -y git make pipx openssh-client
-pipx ensurepath
-pipx install ansible-core
+sudo apt install -y git make curl openssh-client
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Close and reopen the Ubuntu window so `ansible` is on your `PATH`, then check with
-`ansible --version`.
+Close and reopen the Ubuntu window so `uv` is on your `PATH`. That's all: you don't
+install Ansible yourself. The first `make` that needs it installs the version the repo
+pins into `~/pi-setup/.venv` (with uv fetching the Python it needs), the same one
+used on every other computer and in CI.
 
 ## 3. Get the repo inside WSL (once)
 
@@ -76,7 +77,7 @@ chmod 644 ~/.ssh/id_ed25519.pub
 From `~/pi-setup` in Ubuntu, the same commands as on Linux or macOS:
 
 ```bash
-make deps                   # once: Ansible collections
+make deps                   # optional: install Ansible now (otherwise the next line does)
 make ping                   # expect: pilab | SUCCESS => "ping": "pong"
 make apply                  # configure every Pi
 make apply LIMIT=octopi     # or just one

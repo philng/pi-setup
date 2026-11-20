@@ -90,9 +90,9 @@ GitHub's runners can't boot Pi OS as a fast virtual machine (no KVM, and the Pi
 kernel has no virtio drivers). First boot and the hardware bits (watchdog,
 bootloader, real USB) are checked by the smoke test below on the actual Pi.
 
-Run Molecule locally with `pip install molecule molecule-plugins[docker]` and
-`cd ansible/roles/usbip && molecule test` (needs Docker; on an x86 machine also
-`docker run --privileged --rm tonistiigi/binfmt --install arm64`).
+Run it locally with `make molecule ROLE=usbip`, which installs the pinned Molecule
+into the repo's `.venv/` the first time (needs Docker or Podman, see
+[Testing before you push](../README.md#testing-before-you-push)).
 
 ## Smoke test on the real Pi
 

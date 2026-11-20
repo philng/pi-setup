@@ -210,19 +210,16 @@ next_steps() {
   local user=$1 addr=$2
   step "Next: configure it with Ansible"
   say "These run here on your computer too; Ansible connects to the Pi over SSH."
-  say "  make deps                  # once per computer"
-  say "  make ping LIMIT=$HOST"
+  say "  make ping LIMIT=$HOST       # installs the pinned Ansible into .venv the first time"
   say "  make apply LIMIT=$HOST"
   say "Log in by hand any time with: ssh $user@$addr"
-  if [[ $YES -eq 0 ]] && command -v ansible-playbook >/dev/null; then
-    if confirm "Run them now?" Y; then
-      cd "$REPO_ROOT"
-      [[ -d ansible/.collections ]] || make --no-print-directory deps
-      make --no-print-directory ping LIMIT="$HOST"
-      make --no-print-directory apply LIMIT="$HOST"
-    fi
-  elif ! command -v ansible-playbook >/dev/null; then
-    say "(Ansible isn't installed here yet: see docs/01-base-image.md, or docs/windows.md in WSL.)"
+  if ! command -v uv >/dev/null && ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 13))' 2>/dev/null; then
+    say "(First install uv, which installs Ansible and the Python it needs:"
+    say "   curl -LsSf https://astral.sh/uv/install.sh | sh    or on macOS: brew install uv)"
+  elif [[ $YES -eq 0 ]] && confirm "Run them now?" Y; then
+    cd "$REPO_ROOT"
+    make --no-print-directory ping LIMIT="$HOST"
+    make --no-print-directory apply LIMIT="$HOST"
   fi
 }
 

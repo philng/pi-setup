@@ -28,13 +28,35 @@ Everything needed to rebuild a Pi from a blank SD card or SSD lives here:
 ```bash
 scripts/configure-boot.sh /run/media/$USER/bootfs   # first-boot settings (macOS: /Volumes/bootfs,
                                                      # Windows: /mnt/e in WSL)
-make deps                                            # once: Ansible collections
 make ping && make apply                              # after the Pi boots
 ```
 
 The `make` commands run on **your own computer** (Linux, macOS, or WSL on Windows),
 never on the Pi: Ansible connects to the Pis over SSH. On Windows, follow
 [docs/windows.md](docs/windows.md) to set up WSL first.
+
+### Tools on your computer
+
+You need `git`, `make` and [uv](https://docs.astral.sh/uv/). Nothing else is
+installed globally: the first `make` target that needs Ansible creates `.venv/` in the
+repo with the exact versions pinned in `requirements.txt` (and the Ansible collections
+in `ansible/.collections/`), so your laptop, WSL and CI all run the same Ansible. You
+never activate it; `make` uses it. Run `make deps` to set it up ahead of time.
+
+| Computer | Install once |
+| --- | --- |
+| Fedora Atomic (Silverblue, Sway Atomic, ...) | `git` and `make` are on the host. `curl -LsSf https://astral.sh/uv/install.sh \| sh` installs uv to `~/.local/bin`, no layering or toolbox needed. Run `make` on the host, not in a toolbox, so the Molecule tests can reach Podman |
+| Other Linux | `git`, `make` and `curl` from your package manager, then the uv line above |
+| macOS | `xcode-select --install` (git, make), then `brew install uv` or the uv line above |
+| Windows | In WSL: see [docs/windows.md](docs/windows.md) |
+
+uv also fetches the Python version in `.python-version` if your system's is older
+(macOS ships 3.9, Ubuntu 24.04 has 3.12). Without uv, `make` falls back to
+`python3 -m venv`, which needs Python 3.13 or newer.
+
+To move to a newer Ansible, edit the version in `requirements.in` (or the dev tools in
+`requirements-dev.in`), run `make lock`, and commit both files. Everyone's next `make`
+updates their `.venv`.
 
 See [docs/01-base-image.md](docs/01-base-image.md) for the details. Each Pi has its own
 hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
@@ -76,11 +98,11 @@ Day to day: `make apply` after changing anything, `make health` to check on the 
 
 ## Testing before you push
 
-CI minutes are limited on a private repo, so catch failures locally first:
+Catch failures locally before CI does. `make lint` and `make test` add the pinned
+ansible-lint, yamllint, shellcheck and Molecule (`requirements-dev.txt`) to `.venv`
+the first time (or run `make deps-dev`); CI installs the same versions.
 
 ```bash
-pip install ansible-core ansible-lint yamllint shellcheck-py molecule "molecule-plugins[docker]" docker
-make deps && ansible-galaxy collection install community.docker   # once
 make hooks                                  # once: run `make lint` before every commit
 make test ROLE=base                         # lint, then one role's Molecule test
 make test                                   # lint, then every role

@@ -18,7 +18,7 @@ if [ $# -eq 0 ] || ! git cat-file -e "$1^{commit}" 2>/dev/null; then
 else
   changed=$(git diff --name-only "$1"...HEAD)
   changed_roles=$(sed -nE 's#^ansible/roles/([^/]+)/.*#\1#p' <<<"$changed" | sort -u)
-  shared='^(ansible/|molecule/|\.config/molecule/|Makefile$|\.github/workflows/molecule\.yml$|\.github/scripts/molecule-roles\.sh$)'
+  shared='^(ansible/|molecule/|\.config/molecule/|Makefile$|requirements(-dev)?\.txt$|\.python-version$|\.github/workflows/molecule\.yml$|\.github/scripts/molecule-roles\.sh$)'
   if grep -vE '^ansible/roles/' <<<"$changed" | grep -qE "$shared"; then
     selected=$all
   else
