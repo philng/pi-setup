@@ -18,6 +18,8 @@ PYTHON_VERSION := $(shell sed -n 's/^python *= *"\([0-9.]*\)".*/\1/p' mise.toml)
 UV := mise exec -- uv
 PIP_INSTALL := $(UV) pip install --quiet --python $(VENV)/bin/python
 export VIRTUAL_ENV := $(VENV)
+# The run targets call $(VENV)/bin/ansible* by full path, so an older Ansible
+# installed elsewhere on your computer is never used by mistake.
 export PATH := $(VENV)/bin:$(PATH)
 # Trust this repo's mise.toml for commands run by make, without a prompt.
 export MISE_TRUSTED_CONFIG_PATHS := $(CURDIR)
@@ -88,23 +90,23 @@ $(COLLECTIONS)-dev: | $(COLLECTIONS)
 # one as you set it up, so a Pi you don't have yet is never tried. Exit code 4
 # means a Pi was UNREACHABLE: say what to do about that.
 ping: deps ## Check the Pis are reachable over SSH
-	@cd $(ANSIBLE_DIR) && ansible $(or $(LIMIT),pis) -m ansible.builtin.ping || { rc=$$?; \
+	@cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible $(or $(LIMIT),pis) -m ansible.builtin.ping || { rc=$$?; \
 	  [ $$rc -ne 4 ] || { echo; \
 	  echo "A Pi above didn't answer. If you haven't set it up yet, remove it from"; \
 	  echo "ansible/inventory/hosts.yml (make new-pi adds it back later)."; \
 	  echo "To check just one Pi: make ping LIMIT=octopi"; }; exit $$rc; }
 
 apply: deps ## Configure the Pis
-	cd $(ANSIBLE_DIR) && ansible-playbook site.yml $(LIMIT_ARG)
+	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook site.yml $(LIMIT_ARG)
 
 check: deps ## Dry run with diff
-	cd $(ANSIBLE_DIR) && ansible-playbook site.yml --check --diff $(LIMIT_ARG)
+	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook site.yml --check --diff $(LIMIT_ARG)
 
 health: deps ## Read-only health report (fails if something needs attention)
-	cd $(ANSIBLE_DIR) && ansible-playbook health.yml $(LIMIT_ARG)
+	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook health.yml $(LIMIT_ARG)
 
 octoprint-backup: deps ## Copy OctoPrint settings from the printer Pi to backups/octoprint/
-	cd $(ANSIBLE_DIR) && ansible-playbook octoprint-backup.yml $(LIMIT_ARG)
+	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook octoprint-backup.yml $(LIMIT_ARG)
 
 lint: deps-dev ## Lint YAML, Ansible and shell
 	yamllint .
