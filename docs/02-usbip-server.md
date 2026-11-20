@@ -22,6 +22,9 @@
   journald's built-in volatile storage. Pi OS Trixie logs only to the journal, so
   this does the job of log2ram without a third-party package. Switches to normal
   on-disk logs automatically once you boot from the SSD.
+- **Tailscale** (its own role, run right after base on every Pi): joins your tailnet
+  with an auth key given at apply time, and the firewall lets the tailnet in. See
+  [tailscale.md](tailscale.md).
 - **Pi 4 bootloader:** boot order "SD card, then USB". With the card removed it
   boots the SSD. Takes effect after the next reboot.
 

@@ -1,0 +1,45 @@
+---
+# Tailscale on every Pi, from Tailscale's own apt repository.
+
+# The repository's signing key, checked against this SHA-256 before apt trusts
+# it. If Tailscale ever rotates the key, `make apply` stops here instead of
+# trusting a key it hasn't seen: check the new one, then update the checksum.
+tailscale_apt_repo_url: https://pkgs.tailscale.com/stable/debian
+tailscale_apt_key_url: "{{ tailscale_apt_repo_url }}/{{ ansible_facts['distribution_release'] }}.noarmor.gpg"
+tailscale_apt_key_checksum: "sha256:3e03dacf222698c60b8e2f990b809ca1b3e104de127767864284e6c228f1fb39"
+
+# Let unattended-upgrades install new Tailscale releases (daily, like Debian's
+# security updates). false: update Tailscale only when you choose to.
+tailscale_auto_update: true
+
+# The auth key that joins a Pi to your tailnet, used only while the Pi is
+# logged out. First found wins:
+#   1. tailscale_authkey set in your inventory (vault it), or
+#   2. the TAILSCALE_AUTHKEY environment variable on your computer, or
+#   3. the file below on your computer (secrets/ is git-ignored).
+# No key: the Pi is set up but not joined, and make apply says so (no failure).
+tailscale_authkey_file: "{{ playbook_dir }}/../secrets/tailscale-authkey"
+tailscale_authkey: >-
+  {{ lookup('ansible.builtin.env', 'TAILSCALE_AUTHKEY')
+     or (lookup('ansible.builtin.file', tailscale_authkey_file) | trim
+         if tailscale_authkey_file is file else '') }}
+
+# The Pi's name in the tailnet (and in MagicDNS: ssh admin@octopi).
+tailscale_hostname: "{{ inventory_hostname }}"
+
+# Extra flags for the first `tailscale up`, e.g. ["--advertise-tags=tag:pi"].
+tailscale_up_args: []
+
+# Tailscale SSH: tailscaled answers SSH on the Pi's tailnet address itself,
+# with logins decided by your tailnet's access rules instead of SSH keys.
+# Off by default: plain OpenSSH (key-only) over the tailnet works without it.
+tailscale_ssh: false
+
+# Firewall: everything arriving over the tailnet (interface tailscale0) is let
+# in, like the LAN for SSH plus every port roles open to the LAN (OctoPrint,
+# USB/IP). Who can reach the Pi is then set by your tailnet's access rules.
+# false: only SSH over the tailnet.
+tailscale_firewall_trust_tailnet: true
+# Tailscale's UDP port, open to anyone so peers can connect directly instead
+# of through a relay.
+tailscale_port: 41641

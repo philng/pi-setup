@@ -21,6 +21,11 @@
           echo "boot_order=$(rpi-eeprom-config | sed -n 's/^BOOT_ORDER=//p')"
         fi
         echo "last_upgrade=$(stat -c %y /var/lib/apt/periodic/unattended-upgrades-stamp 2>/dev/null | cut -d. -f1)"
+        if command -v tailscale >/dev/null; then
+          ts=$(tailscale status --json --peers=false 2>/dev/null |
+            python3 -c 'import json, sys; print(json.load(sys.stdin)["BackendState"])' 2>/dev/null)
+          echo "tailscale=${ts:-not running}"
+        fi
         if systemctl cat usbipd >/dev/null 2>&1; then
           echo "usbipd=$(systemctl is-active usbipd)"
           echo "exported=$(ls /sys/bus/usb/drivers/usbip-host 2>/dev/null | grep -E '^[0-9]+-' | paste -sd, -)"
@@ -56,6 +61,8 @@
             + (['reboot needed to finish updates'] if health.reboot_required == 'yes' else [])
             + (['root filesystem over 80% full']
               if root.size_available < 0.2 * root.size_total else [])
+            + (['Tailscale is ' ~ health.tailscale ~ ' (not in the tailnet; see docs/tailscale.md)']
+              if health.tailscale | default('Running') not in ['Running', 'Stopped'] else [])
             + (['usbipd is running but no dongle is exported (plugged in?)']
               if health.usbipd | default('') == 'active' and not health.exported else [])
           }}
@@ -69,6 +76,7 @@
           - "Throttled flags: {{ health.throttled | default('n/a') }} (0x0 is perfect)"
           - "Bootloader BOOT_ORDER: {{ health.boot_order | default('n/a') }}"
           - "Last automatic upgrade: {{ health.last_upgrade | default('never', true) }}"
+          - "Tailscale: {{ health.tailscale | default('not installed') }}"
           - "usbipd: {{ health.usbipd | default('n/a') }}, exported: {{ health.exported | default('none', true) }}"
           - "Warnings: {{ health_warnings | join('; ') or 'none' }}"
           - "Problems: {{ health_problems | join('; ') or 'none' }}"

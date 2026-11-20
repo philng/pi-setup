@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+Types: deb
+URIs: {{ tailscale_apt_repo_url }}
+Suites: {{ ansible_facts['distribution_release'] }}
+Components: main
+Signed-By: /usr/share/keyrings/tailscale-archive-keyring.gpg

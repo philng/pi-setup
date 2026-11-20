@@ -1,0 +1,95 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the package's state and the repositories' origins
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - apt-cache policy tailscale
+        - apt-cache policy
+      register: tailscale_verify_policy
+      changed_when: false
+
+    - name: Tailscale is installed from Tailscale's repo, whose origin is the one unattended-upgrades allows
+      ansible.builtin.assert:
+        that:
+          - "'Installed: (none)' not in tailscale_verify_policy.results[0].stdout"
+          - "'pkgs.tailscale.com' in tailscale_verify_policy.results[0].stdout"
+          - "'o=Tailscale' in tailscale_verify_policy.results[1].stdout"
+        fail_msg: "{{ tailscale_verify_policy.results | map(attribute='stdout') | list }}"
+
+    - name: Unattended-upgrades accepts the config and includes Tailscale
+      ansible.builtin.command: unattended-upgrade --dry-run --debug
+      register: tailscale_verify_uu
+      changed_when: false
+      failed_when: >-
+        tailscale_verify_uu.rc != 0
+        or 'origin=Tailscale' not in tailscale_verify_uu.stdout + tailscale_verify_uu.stderr
+
+    # apt already proved this key signs the repo; this proves it is the key
+    # Tailscale publishes (fingerprint from Tailscale's own install script).
+    - name: Install gpg to read the signing key
+      ansible.builtin.apt:
+        name: gpg
+        state: present
+
+    - name: Read the signing key's fingerprint
+      ansible.builtin.command: gpg --show-keys --with-colons /usr/share/keyrings/tailscale-archive-keyring.gpg
+      register: tailscale_verify_key
+      changed_when: false
+
+    - name: The pinned key is Tailscale's package signing key
+      ansible.builtin.assert:
+        that: "'fpr:::::::::2596A99EAAB33821893C0A79458CA832957F5868:' in tailscale_verify_key.stdout"
+        fail_msg: "{{ tailscale_verify_key.stdout }}"
+
+    - name: Read tailscaled unit state
+      ansible.builtin.systemd_service:
+        name: tailscaled
+      register: tailscale_verify_unit
+
+    - name: Tailscaled is enabled and running
+      ansible.builtin.assert:
+        that:
+          - tailscale_verify_unit.status.ActiveState == 'active'
+          - tailscale_verify_unit.status.UnitFileState == 'enabled'
+
+    - name: Read Tailscale's state and settings
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - tailscale status --json --peers=false
+        - tailscale debug prefs
+      register: tailscale_verify_ts
+      changed_when: false
+      failed_when: false
+
+    - name: Not joined without a key, Tailscale SSH on as asked
+      ansible.builtin.assert:
+        that:
+          - (tailscale_verify_ts.results[0].stdout | from_json).BackendState == 'NeedsLogin'
+          - (tailscale_verify_ts.results[1].stdout | from_json).RunSSH
+
+    - name: Look for a leftover auth key file
+      ansible.builtin.stat:
+        path: /run/tailscale-authkey
+      register: tailscale_verify_keyfile
+
+    - name: No auth key is left on the Pi
+      ansible.builtin.assert:
+        that: not tailscale_verify_keyfile.stat.exists
+
+    - name: Read live firewall table
+      ansible.builtin.command: nft list table inet pilab
+      register: tailscale_verify_nft
+      changed_when: false
+
+    - name: Tailnet and Tailscale's UDP port are let in, LAN SSH still is
+      ansible.builtin.assert:
+        that:
+          - "'iifname \"tailscale0\" accept' in tailscale_verify_nft.stdout"
+          - "'udp dport 41641 accept' in tailscale_verify_nft.stdout"
+          - "'ip saddr @lan4 tcp dport 22 accept' in tailscale_verify_nft.stdout"
+          - "'policy drop' in tailscale_verify_nft.stdout"
+        fail_msg: "{{ tailscale_verify_nft.stdout }}"
