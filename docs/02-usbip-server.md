@@ -1,8 +1,24 @@
 # Step 2: Base setup and USB/IP server
 
 `make apply` now configures every Pi with the **base** role, and the USB/IP Pi
-(`pilab`, group `usbip`) with the **usbip** role. The `usbip` group ships empty:
-`make new-pi --role usbip` adds `pilab` to it when you set that Pi up.
+(`pilab-living`, the Pi by the TV, group `usbip`) with the **usbip** role. The rack
+Pi, `pilab-rack`, is in the `general` group and gets only the shared roles (base,
+tailscale, dotfiles), never usbip. `make new-pi --role usbip` (or `--role general`)
+adds a Pi to its group when you set it up.
+
+### Renaming the old `pilab`
+
+The base role sets each Pi's hostname from the inventory, so the Pi that used to be
+`pilab` becomes `pilab-living` on its next `make apply`. Until then the name
+`pilab-living` doesn't resolve, so for that one run point Ansible at the old name:
+
+```bash
+make apply LIMIT=pilab-living -e ansible_host=pilab
+```
+
+Then renew its DHCP lease (or reboot it) so your router learns the new name, run
+`ssh-keygen -R pilab`, and re-run `sudo client/linux/install.sh` on the gaming PC so
+it attaches from `pilab-living`.
 
 ## What the base role does (every Pi)
 
@@ -54,7 +70,7 @@ Handy knobs (put them in `ansible/inventory/group_vars/` or `host_vars/`):
 ### Adding a dongle
 
 Plug it into the Pi and run `lsusb`. Find the line for it, e.g.
-`ID 37d7:2401 Flydigi ...`, and add it in `ansible/inventory/host_vars/pilab.yml`:
+`ID 37d7:2401 Flydigi ...`, and add it in `ansible/inventory/host_vars/pilab-living.yml`:
 
 ```yaml
 usbip_devices:
@@ -105,12 +121,16 @@ What CI can't prove, because it needs your hardware:
 1. `make check` shows what would change, then `make apply`. (On a Pi that has never had
    a `make apply`, `make check` stops and tells you to apply first.) Run `make apply`
    a second time: it should report `changed=0`.
-2. `ssh admin@pilab sudo reboot` (applies the bootloader setting), then
+2. `ssh admin@pilab-living sudo reboot` (applies the bootloader setting), then
    `make ping` works again.
 3. Plug in each dongle. On the Pi: `usbip list -l` shows it, and
    `journalctl -u 'usbip-bind@*'` shows it was exported.
-4. From the gaming PC: `usbip list -r pilab` lists the dongles (step 3
+4. From the gaming PC: `usbip list -r pilab-living` lists the dongles (step 3
    sets up attaching them automatically).
 5. Plug a USB stick into the Pi: it must **not** show up in `usbip list -r`.
 6. From a device outside your LAN (e.g. phone on mobile data via a VPN that
    isn't bridged), port 3240 should not be reachable.
+7. `pilab-rack` does **not** run usbip: `ssh admin@pilab-rack systemctl status usbipd`
+   says the unit isn't found, and `usbip list -r pilab-rack` can't connect.
+8. `make apply LIMIT=pilab-rack` twice: the second run reports `changed=0`, and
+   `make health LIMIT=pilab-rack` passes.

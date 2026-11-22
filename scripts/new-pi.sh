@@ -5,7 +5,7 @@
 #   scripts/new-pi.sh --role printer --hostname octopi --boot /Volumes/bootfs --yes
 #   scripts/new-pi.sh --wait --hostname octopi   # just wait for a booted Pi
 #
-# It asks what the Pi is for (USB/IP box or printer), its hostname and your SSH
+# It asks what the Pi is for (USB/IP box, printer, or shared roles only), its hostname and your SSH
 # key, adds it to ansible/inventory/hosts.yml in the right group, writes the
 # first-boot settings onto the card with configure-boot.sh, then waits until the
 # Pi answers on SSH and tells you (or runs) the Ansible commands.
@@ -39,9 +39,12 @@ Usage: scripts/new-pi.sh [options]      (or: make new-pi)
 Sets up a Pi from your computer: inventory entry, first-boot settings on the
 card, then waits for SSH. Asks for anything you don't pass.
 
-  --role usbip|printer   usbip: USB-over-IP box for the controller dongles
+  --role usbip|printer|general
+                         usbip: USB-over-IP box for the controller dongles
                          printer: OctoPrint for the 3D printer
-  --hostname NAME        default: pilab (usbip) or octopi (printer)
+                         general: only the roles every Pi gets
+  --hostname NAME        default: pilab-living (usbip), octopi (printer)
+                         or pilab-rack (general)
   --key FILE             SSH public key to log in with (default ~/.ssh/id_ed25519.pub)
   --boot PATH            the mounted "bootfs" partition (in WSL also a drive letter, E:)
   --no-boot              only update the inventory, don't write a card
@@ -240,16 +243,19 @@ say "Everything here runs on this computer. You don't need a keyboard or screen 
 
 # --- 1. Role ----------------------------------------------------------------
 step "1. What is this Pi for?"
-say "  1) usbip    USB-over-IP box for the controller dongles (usually 'pilab')"
+say "  1) usbip    USB-over-IP box for the controller dongles (usually 'pilab-living')"
 say "  2) printer  OctoPrint for the 3D printer (usually 'octopi')"
+say "  3) general  only the roles every Pi gets (usually 'pilab-rack')"
 say "This picks its group in ansible/inventory/hosts.yml, and the group decides what"
-say "Ansible installs (usbip: base, usbip, dotfiles; printers: base, podman, octoprint, dotfiles)."
+say "Ansible installs. Every Pi gets base, tailscale and dotfiles; usbip adds usbip,"
+say "printers adds podman and octoprint, general adds nothing."
 while :; do
-  if [[ -z $ROLE ]]; then ask ROLE "Choose 1 or 2" ""; fi
+  if [[ -z $ROLE ]]; then ask ROLE "Choose 1, 2 or 3" ""; fi
   case $ROLE in
-    1 | usbip) ROLE=usbip GROUP=usbip DEFAULT_HOST=pilab; break ;;
+    1 | usbip) ROLE=usbip GROUP=usbip DEFAULT_HOST=pilab-living; break ;;
     2 | printer | printers) ROLE=printer GROUP=printers DEFAULT_HOST=octopi; break ;;
-    *) [[ $YES -eq 0 ]] || die "--role must be usbip or printer"; say "Type 1 or 2."; ROLE='' ;;
+    3 | general) ROLE=general GROUP=general DEFAULT_HOST=pilab-rack; break ;;
+    *) [[ $YES -eq 0 ]] || die "--role must be usbip, printer or general"; say "Type 1, 2 or 3."; ROLE='' ;;
   esac
 done
 ok "role: $ROLE (inventory group: $GROUP)"

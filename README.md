@@ -61,17 +61,19 @@ To move to a newer Ansible, edit the version in `requirements.in` (or the dev to
 `mise.toml`. Everyone's next `make` picks up the change.
 
 See [docs/01-base-image.md](docs/01-base-image.md) for the details. Each Pi has its own
-hostname: `pilab` is the default, and the OctoPrint Pi is flashed with
-`PI_HOSTNAME=octopi scripts/configure-boot.sh ...`, or by answering `printer` in `make new-pi`.
+hostname: `pilab-living` is the default, and the others are flashed with e.g.
+`PI_HOSTNAME=octopi scripts/configure-boot.sh ...`, or by picking their role in `make new-pi`.
 
 | Host | Inventory group | Roles |
 | --- | --- | --- |
-| `pilab` | `usbip` | base, tailscale, usbip, dotfiles |
+| `pilab-living` (by the TV) | `usbip` | base, tailscale, usbip, dotfiles |
+| `pilab-rack` | `general` | base, tailscale, dotfiles |
 | `octopi` | `printers` | base, tailscale, podman, octoprint, dotfiles |
 
 `ansible/inventory/hosts.yml` lists only the Pis you actually have: `make new-pi` adds
-each one as you set it up, so every `make` target works with just `octopi`, just `pilab`,
-or both. The `usbip` group ships empty until you add the USB/IP Pi.
+each one as you set it up, so every `make` target works with any subset of the Pis.
+Only `pilab-living` gets usbip; `general` is for Pis that only get the shared roles.
+If a Pi isn't built yet, take it out of the inventory until `make new-pi` adds it back.
 
 Every Pi also gets [Tailscale](docs/tailscale.md): the first `make apply` prints a login
 link for each Pi, and once you open it `ssh admin@octopi` works from anywhere on your

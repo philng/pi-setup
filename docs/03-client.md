@@ -14,14 +14,14 @@ picture; the controllers never go through the Apple TV.
 From this repo on the gaming PC:
 
 ```bash
-sudo client/linux/install.sh            # uses pilab
+sudo client/linux/install.sh            # uses pilab-living
 # or: sudo client/linux/install.sh 192.168.1.50
 ```
 
-`pilab` is resolved by your router's DNS; see
+`pilab-living` is resolved by your router's DNS; see
 [How your computer finds the Pis](01-base-image.md#how-your-computer-finds-the-pis).
-Installed before the switch from `pilab.local`? Run the script again, or set
-`SERVER=pilab` in `/etc/usbip-autoattach.conf` and restart the service.
+Installed when the Pi was still `pilab` (or `pilab.local`)? Run the script again, or set
+`SERVER=pilab-living` in `/etc/usbip-autoattach.conf` and restart the service.
 
 On Fedora Atomic the first run layers `usbip` (and `kernel-modules-extra` if
 the `vhci-hcd` module is missing) with rpm-ostree and asks you to reboot.
@@ -38,7 +38,7 @@ the `vhci-hcd` module is missing) with rpm-ostree and asks you to reboot.
 Check it:
 
 ```bash
-systemctl status usbip-autoattach   # running, "attached pilab:1-1.3" in the log
+systemctl status usbip-autoattach   # running, "attached pilab-living:1-1.3" in the log
 usbip port                          # the attached dongles
 ```
 
@@ -53,14 +53,14 @@ It ships Microsoft-signed USB/IP drivers and talks to the standard `usbipd`
 on the Pi; you don't need its server installer.
 
 1. Install it from its releases page (installer or portable ZIP), run as Administrator.
-2. **Scan**, pick `pilab`, **List**, then connect each dongle and add it to
+2. **Scan**, pick `pilab-living`, **List**, then connect each dongle and add it to
    **Favorites** with auto-reconnect.
 3. Turn on start with Windows / start minimized.
 
 Or script it, e.g. from a Sunshine "do" command or a scheduled task at logon:
 
 ```powershell
-USBAnywhere.exe --minimized --connect pilab 1-1.3
+USBAnywhere.exe --minimized --connect pilab-living 1-1.3
 ```
 
 Only one machine can hold a dongle at a time. If Linux still has it (say, the

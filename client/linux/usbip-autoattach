@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Keep every USB device exported by a USB/IP server attached to this machine.
 #
-#   usbip-autoattach pilab          # loop forever (what the service runs)
-#   usbip-autoattach --once pilab   # one pass, then exit
+#   usbip-autoattach pilab-living          # loop forever (what the service runs)
+#   usbip-autoattach --once pilab-living   # one pass, then exit
 #   usbip-autoattach --detach-all         # give every attached device back
 #
 # The Pi only exports the dongles you chose, and a device that's already

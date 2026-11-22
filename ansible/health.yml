@@ -1,5 +1,5 @@
 ---
-# Read-only health report for every Pi:  make health   (or make health LIMIT=pilab)
+# Read-only health report for every Pi:  make health   (or make health LIMIT=pilab-rack)
 # Fails if something needs attention; changes nothing.
 - name: Health check
   hosts: pis

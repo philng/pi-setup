@@ -31,7 +31,7 @@ PI_USER=$(sed -n 's/^ansible_user:[[:space:]]*//p' "$GROUP_VARS" | tr -d "\"' \r
   || die "'$PI_HOSTNAME' isn't a valid hostname: use lowercase letters, digits and dashes"
 if ! grep -qE "^ {12}$PI_HOSTNAME:[[:space:]]*\$" "$REPO_ROOT/ansible/inventory/hosts.yml"; then
   echo "warning: $PI_HOSTNAME is not in ansible/inventory/hosts.yml, so Ansible won't configure it." >&2
-  echo "         Add it under usbip or printers there (make new-pi does this for you)." >&2
+  echo "         Add it under usbip, printers or general there (make new-pi does this for you)." >&2
 fi
 
 # Make sure this really is a Raspberry Pi boot partition.
