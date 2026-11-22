@@ -31,10 +31,11 @@ make new-pi
 
 It walks you through the rest and explains each step:
 
-1. **What the Pi is for.** `usbip` (the controller-dongle box, usually `pilab`) or
-   `printer` (OctoPrint, usually `octopi`). This puts the Pi in that group in
+1. **What the Pi is for.** `usbip` (the controller-dongle box, usually `pilab-living`),
+   `printer` (OctoPrint, usually `octopi`) or `general` (only the shared roles, usually
+   `pilab-rack`). This puts the Pi in that group in
    `ansible/inventory/hosts.yml`, and the group decides what Ansible installs.
-   It refuses a name that's already in the other group.
+   It refuses a name that's already in another group.
 2. **Hostname.** Checked, and added to the inventory if it's new (commit that change).
    An existing name is treated as a re-flash and the inventory is left alone.
 3. **Login and SSH key.** You always log in as `admin` (`ansible_user` in
@@ -132,7 +133,7 @@ make ping   # first run installs Ansible into .venv/. Expect: <each Pi> | SUCCES
 
 ### How your computer finds the Pis
 
-Everything here uses the plain hostnames `pilab` and `octopi`, which your router's
+Everything here uses the plain hostnames `pilab-living`, `pilab-rack` and `octopi`, which your router's
 DNS answers for its DHCP clients (most home routers do). `.local` (mDNS) names are
 not used: WSL usually can't resolve them, and anything on the LAN can answer for a
 `.local` name, which matters for the gaming PC's usbip connection.
@@ -141,8 +142,8 @@ not used: WSL usually can't resolve them, and anything on the LAN can answer for
   usually "reserve IP" or "static lease" next to the Pi). The address then never
   changes, so a Pi can't drop off the network after a lease renewal, and the name
   keeps pointing at the right Pi.
-- **Check the name resolves:** `ping -c1 pilab`. If it doesn't, try `pilab.lan` or
-  `pilab.home` (some routers add a suffix; your computer adds it for you if it
+- **Check the name resolves:** `ping -c1 pilab-living`. If it doesn't, try `pilab-living.lan` or
+  `pilab-living.home` (some routers add a suffix; your computer adds it for you if it
   uses the router's DNS).
 - **Fallback:** set `ansible_host` to the Pi's IP in `ansible/inventory/hosts.yml`,
   for example `ansible_host: 192.168.1.50`, and pass the IP to
@@ -157,6 +158,6 @@ configuration arrives with the roles in step 2.
 - **SSH asks for a password:** the key in `user-data` didn't match. Re-run
   `SSH_PUBKEY_FILE=/path/to/key.pub scripts/configure-boot.sh ...` and reboot from a fresh flash.
 - **Host key warning after re-flashing:** expected, every flash makes new host keys.
-  `ssh-keygen -R pilab`.
-- **Check what cloud-init did:** `ssh admin@pilab cloud-init status --long`
+  `ssh-keygen -R pilab-living`.
+- **Check what cloud-init did:** `ssh admin@pilab-living cloud-init status --long`
   and `sudo cat /var/log/cloud-init-output.log`.

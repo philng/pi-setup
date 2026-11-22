@@ -85,7 +85,7 @@ make apply LIMIT=octopi     # or just one
 
 The first connection to each Pi asks you to confirm its host key; type `yes`.
 
-## If `pilab` / `octopi` doesn't resolve
+## If `pilab-living` / `octopi` doesn't resolve
 
 The repo uses plain hostnames, which WSL looks up through Windows and your router,
 so `make ping` normally just works. `.local` names usually don't resolve in WSL,

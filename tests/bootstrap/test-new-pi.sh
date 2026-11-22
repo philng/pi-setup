@@ -42,14 +42,32 @@ if run --yes --role printer --hostname printer2 --boot "$WORK/boot" >"$WORK/out"
   pass "non-interactive new printer"
 else fail "non-interactive new printer"; cat "$WORK/out"; fi
 
-# 1b. The first Pi in a group with no hosts yet (usbip ships empty) lands there,
-#     and the result is still a valid inventory.
+# 1b. The first Pi in a group with no hosts yet lands there, and the result is
+#     still a valid inventory. (Empty the usbip group in the copy first.)
 setup
-if [[ -z $(group_of pilab) ]] \
-  && run --yes --role usbip --hostname pilab --no-boot >"$WORK/out" 2>&1 \
-  && [[ $(group_of pilab) == "usbip pilab" && $(group_of octopi) == "printers octopi" ]]; then
+python3 - "$INV" <<'PY2'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+entry = "            pilab-living:\n              ansible_host: pilab-living\n"
+assert entry in s
+open(p, "w").write(s.replace(entry, ""))
+PY2
+if [[ -z $(group_of pilab-living) ]] \
+  && run --yes --role usbip --hostname pilab-living --no-boot >"$WORK/out" 2>&1 \
+  && [[ $(group_of pilab-living) == "usbip pilab-living" && $(group_of octopi) == "printers octopi" ]]; then
   pass "first Pi in an empty group"
 else fail "first Pi in an empty group"; cat "$WORK/out"; fi
+
+# 1c. The shipped inventory: only pilab-living gets usbip; pilab-rack is in
+#     general (shared roles only), and a new general Pi joins it.
+setup
+if [[ $(group_of pilab-living) == "usbip pilab-living" && $(group_of pilab-rack) == "general pilab-rack" ]] \
+  && run --yes --role general --hostname rack2 --no-boot >"$WORK/out" 2>&1 \
+  && [[ $(group_of rack2) == "general rack2" && $(group_of pilab-rack) == "general pilab-rack" ]] \
+  && ! run --yes --role usbip --hostname pilab-rack --no-boot >/dev/null 2>&1; then
+  pass "living/rack split"
+else fail "living/rack split"; cat "$WORK/out"; fi
 
 # 2. Re-flashing a host that's already there leaves the inventory alone.
 setup
@@ -86,8 +104,8 @@ else fail "interactive answers"; cat "$WORK/out"; fi
 # 6. The login user comes from group_vars/pis.yml (one place to change it).
 setup
 sed -i.bak 's/^ansible_user: .*/ansible_user: phil/' "$WORK/repo/ansible/inventory/group_vars/pis.yml"
-if run --yes --role usbip --hostname pilab --boot "$WORK/boot" >"$WORK/out" 2>&1 \
-  && [[ $(user_data) == "pilab phil" ]]; then
+if run --yes --role usbip --hostname pilab-living --boot "$WORK/boot" >"$WORK/out" 2>&1 \
+  && [[ $(user_data) == "pilab-living phil" ]]; then
   pass "login user from group_vars"
 else fail "login user from group_vars"; cat "$WORK/out"; fi
 
@@ -96,9 +114,9 @@ setup
 cp "$WORK/home/.ssh/id_ed25519.pub" "$WORK/home/.ssh/other.pub"
 : > "$WORK/home/.ssh/other"
 echo "not a key" > "$WORK/home/notakey.pub"
-if run --yes --role usbip --hostname pilab --key "$WORK/home/.ssh/other" --boot "$WORK/boot" >"$WORK/out" 2>&1 \
+if run --yes --role usbip --hostname pilab-living --key "$WORK/home/.ssh/other" --boot "$WORK/boot" >"$WORK/out" 2>&1 \
   && grep -q "IdentityFile" "$WORK/out" \
-  && ! run --yes --role usbip --hostname pilab --key "$WORK/home/notakey.pub" --no-boot >/dev/null 2>&1; then
+  && ! run --yes --role usbip --hostname pilab-living --key "$WORK/home/notakey.pub" --no-boot >/dev/null 2>&1; then
   pass "key checks"
 else fail "key checks"; cat "$WORK/out"; fi
 

@@ -88,9 +88,9 @@ changes nothing. Opening the link needs your tailnet, so that part is in the smo
       **Connect** lets the run carry on within a few seconds, with no warning about
       the tailnet
 - [ ] Each Pi shows up under **Machines** in the admin console with its inventory
-      name (`octopi`, `pilab`), and you've disabled key expiry on it
+      name (`octopi`, `pilab-living`, `pilab-rack`), and you've disabled key expiry on it
 - [ ] `make apply` again: `changed=0`, and no login link is printed
-- [ ] `ssh admin@pilab` still works from the LAN, without Tailscale on your computer
+- [ ] `ssh admin@pilab-living` and `ssh admin@pilab-rack` still work from the LAN, without Tailscale on your computer
 - [ ] From a computer on the tailnet but not on your LAN (e.g. a laptop on a phone
       hotspot): `ssh admin@octopi` logs in with your key
 - [ ] From that computer, <http://octopi> loads OctoPrint

@@ -248,7 +248,7 @@ jobs:
           python3 -m pip install -q pyyaml
           python3 - <<'PY'
           import yaml
-          for boot, host in [("fakeboot", "pilab"), ("fakeboot2", "octopi")]:
+          for boot, host in [("fakeboot", "pilab-living"), ("fakeboot2", "octopi")]:
               raw = open(f"{boot}/user-data", "rb").read()
               assert not raw.startswith(b"\xef\xbb\xbf"), "BOM in user-data"
               assert b"\r\n" not in raw, "CRLF in user-data"
