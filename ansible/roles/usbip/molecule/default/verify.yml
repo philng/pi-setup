@@ -36,7 +36,9 @@
     - name: Rules cover the Steam dongle, XInput receivers and the port
       ansible.builtin.assert:
         that:
-          - "'ATTR{idVendor}==\"28de\", ATTR{idProduct}==\"1142\"' in rules"
+          - "'ATTR{idVendor}==\"28de\", TAG+=' in rules"
+          - "'ATTR{idVendor}==\"37d7\", TAG+=' in rules"
+          - "'ATTR{idVendor}==\"1997\", ATTR{idProduct}==\"2433\"' in rules"
           - "'ATTR{idVendor}==\"045e\", ATTR{idProduct}==\"028e\"' in rules"
           - "'KERNEL==\"1-1.3.*\"' in rules"
       vars:
