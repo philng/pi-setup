@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: network
+  author: philng
+  description: Optional Wi-Fi through NetworkManager, credentials kept off the repo
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

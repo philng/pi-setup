@@ -2,6 +2,9 @@
 - name: Packages
   ansible.builtin.import_tasks: packages.yml
 
+- name: Hostname, login user and first-boot leftovers
+  ansible.builtin.import_tasks: system.yml
+
 - name: Firewall
   ansible.builtin.import_tasks: firewall.yml
 

@@ -22,7 +22,12 @@ it attaches from `pilab-living`.
 
 ## What the base role does (every Pi)
 
-- Hostname from the inventory, timezone, a few basic packages
+- Hostname from the inventory (and `/etc/hosts`), timezone, keyboard layout, a few
+  basic packages
+- **Login user:** groups, passwordless sudo, no password, and the SSH keys from
+  `secrets/authorized_keys` on your computer. These were first-boot only before; now
+  `make apply` changes them on deployed Pis too, then turns cloud-init off. See
+  [changing-settings.md](changing-settings.md)
 - **Firewall (nftables):** inbound is blocked by default. SSH and mDNS are allowed
   from your LAN (private address ranges), and roles open their own ports.
   It only replaces its own table, so Podman's networking is left alone.

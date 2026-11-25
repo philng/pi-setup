@@ -31,7 +31,8 @@ To move to a newer Ansible, edit the version in `requirements.in` (or the dev to
 
 | Path | What it is |
 | --- | --- |
-| `bootstrap/` | First-boot settings (cloud-init) written onto the boot partition when flashing |
+| `bootstrap/` | First-boot settings (cloud-init) written onto the boot partition when flashing: just enough to reach the Pi over SSH. Ansible re-applies them on every run |
+| `secrets/` | Git-ignored, on your computer only: `authorized_keys`, `wifi.yml`, OctoPrint's admin password |
 | `scripts/new-pi.sh` (`make new-pi`) | Guided setup for a new or re-flashed Pi: asks its role and name, adds it to the inventory, writes the card, waits for first boot |
 | `scripts/configure-boot.sh` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows (in WSL, where it also mounts the card and finds your Windows SSH key) |
 | `ansible/` | Everything after first boot: one role per service, applied with `make apply` |
@@ -75,6 +76,7 @@ What CI can't prove is checked by hand on the Pis:
 - [usbip server](02-usbip-server.md#smoke-test-on-the-real-pi) (`pilab-living`, `pilab-rack`)
 - [OctoPrint](octoprint.md#5-smoke-test-on-the-real-pi) (`octopi`)
 - [Tailscale](tailscale.md#smoke-test-on-the-real-pis) (every Pi)
+- [Settings re-applied to deployed Pis](changing-settings.md#smoke-test-on-the-real-pis) (every Pi)
 
 ## Design choices
 

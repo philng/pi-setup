@@ -1,0 +1,5 @@
+---
+# Test data only, in the format of secrets/wifi.yml (never a real network).
+wifi_ssid: "Test Net"
+wifi_password: "not-a-real-password"
+wifi_country: "GB"

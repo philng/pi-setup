@@ -1,0 +1,69 @@
+---
+- name: Load Wi-Fi settings from this computer
+  ansible.builtin.include_vars:
+    file: "{{ network_wifi_file }}"
+  when: network_wifi_file is file
+  no_log: true
+
+- name: Check the Wi-Fi settings
+  ansible.builtin.assert:
+    that:
+      - network_wifi_password | length == 0 or network_wifi_password | length >= 8
+      - network_wifi_country is match('^[A-Z]{2}$')
+    fail_msg: >-
+      Wi-Fi settings in {{ network_wifi_file }}: wifi_password must be empty (open
+      network) or 8+ characters, and wifi_country a two-letter code like US.
+  when: network_wifi_ssid | length > 0
+  no_log: true
+
+# Pi OS keeps Wi-Fi blocked until a country is set. Needs the real Pi.
+- name: Read the Wi-Fi country
+  ansible.builtin.command: raspi-config nonint get_wifi_country
+  register: network_country
+  changed_when: false
+  failed_when: false
+  when: network_wifi_ssid | length > 0 and network_wifi_state == 'present'
+  tags: [molecule-notest]
+
+- name: Set the Wi-Fi country
+  ansible.builtin.command: raspi-config nonint do_wifi_country {{ network_wifi_country }}
+  changed_when: true
+  when:
+    - network_wifi_ssid | length > 0 and network_wifi_state == 'present'
+    - network_country.stdout | default('') | trim != network_wifi_country
+  tags: [molecule-notest]
+
+# Pi OS always has NetworkManager; the test container doesn't. Handler tags
+# aren't honoured by --skip-tags when notified, so the handlers check this.
+- name: Look for nmcli
+  ansible.builtin.stat:
+    path: /usr/bin/nmcli
+  register: network_nmcli
+
+- name: Create NetworkManager's connection directory
+  ansible.builtin.file:
+    path: /etc/NetworkManager/system-connections
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: network_wifi_ssid | length > 0 and network_wifi_state == 'present'
+
+- name: Wi-Fi connection for NetworkManager
+  ansible.builtin.template:
+    src: wifi.nmconnection.j2
+    dest: /etc/NetworkManager/system-connections/{{ network_wifi_connection }}.nmconnection
+    owner: root
+    group: root
+    mode: "0600"
+  when: network_wifi_ssid | length > 0 and network_wifi_state == 'present'
+  no_log: true
+  diff: false
+  notify: Apply Wi-Fi connection
+
+- name: Remove the Wi-Fi connection
+  ansible.builtin.file:
+    path: /etc/NetworkManager/system-connections/{{ network_wifi_connection }}.nmconnection
+    state: absent
+  when: network_wifi_state == 'absent'
+  notify: Apply Wi-Fi connection

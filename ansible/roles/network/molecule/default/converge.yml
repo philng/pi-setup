@@ -1,0 +1,9 @@
+---
+# Wi-Fi settings read from a secrets/wifi.yml-style file, as on your computer.
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    network_wifi_file: "{{ playbook_dir }}/wifi.yml"
+  roles:
+    - network

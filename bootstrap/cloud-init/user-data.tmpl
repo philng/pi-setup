@@ -1,12 +1,13 @@
 #cloud-config
 # Rendered by scripts/configure-boot.sh. @VARS@ come from bootstrap/pi.env,
 # except @PI_USER@: ansible_user in ansible/inventory/group_vars/pis.yml.
+#
+# First boot only, and only what it takes to reach the Pi over SSH: its name,
+# the login user and key, and the network. The Ansible base role re-applies all
+# of it (and the timezone, keyboard, sudo, SSH hardening) on every make apply,
+# then turns cloud-init off, so change settings there, not here.
 hostname: @PI_HOSTNAME@
 manage_etc_hosts: true
-timezone: @PI_TIMEZONE@
-keyboard:
-  model: pc105
-  layout: "@PI_KEYBOARD@"
 
 # Raspberry Pi OS specific: turn on the SSH server.
 enable_ssh: true
@@ -21,6 +22,5 @@ users:
     ssh_authorized_keys:
       - @SSH_PUBKEY@
 
-# Ansible needs Python, which Pi OS Lite already ships. Everything else is
-# configured by Ansible, so keep first boot minimal.
+# Ansible needs Python, which Pi OS Lite already ships.
 package_update: false

@@ -21,6 +21,12 @@ platforms:
     command: /lib/systemd/systemd
 provisioner:
   name: ansible
+  inventory:
+    group_vars:
+      all:
+        # On a Pi this is ansible_user; here Ansible runs as root through
+        # docker exec, so name the login user the base role creates.
+        base_admin_user: admin
   env:
     # One `docker exec` per task instead of several (mkdir, copy the module,
     # run it, clean up): roughly halves the time each task takes.

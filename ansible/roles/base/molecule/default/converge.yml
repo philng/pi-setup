@@ -4,6 +4,9 @@
   become: true
   vars:
     base_volatile_logs: true
+    base_timezone: Europe/London
+    base_admin_authorized_keys_file: "{{ playbook_dir }}/authorized_keys"
+    base_admin_authorized_keys_exclusive: true
     base_firewall_allow:
       - {port: 8080, proto: tcp, src: lan}
       - {port: 9999, proto: udp, src: any}
