@@ -13,6 +13,9 @@ usbip_devices:
     vid: "2dc8"
   - name: Flydigi receivers (all models, e.g. the CD2 for the Vader)
     vid: "37d7"
+  - name: Riitek wireless mini keyboard with touchpad
+    vid: "1997"
+    pid: "2433"
   # 8BitDo and Flydigi receivers in XInput mode pretend to be this Xbox 360 receiver.
   - name: XInput-mode receivers (8BitDo, Flydigi Vader in X mode)
     vid: "045e"

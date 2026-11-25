@@ -67,6 +67,7 @@ Handy knobs (put them in `ansible/inventory/group_vars/` or `host_vars/`):
   - any Steam Controller receiver (`28de:*`): the original one (`28de:1142`)
     and the Steam Controller Puck (`28de:1304`)
   - any Flydigi receiver (`37d7:*`), e.g. the CD2 (`37d7:6001`)
+  - the Riitek wireless mini keyboard with touchpad (`1997:2433`)
   - any 8BitDo receiver (`2dc8:*`)
   - receivers in XInput mode, which pretend to be an Xbox 360 receiver
     (`045e:028e`). 8BitDo and Flydigi Vader dongles do this in X mode.
@@ -83,6 +84,7 @@ Plug it into the Pi and run `lsusb`. Find the line for it, e.g.
 usbip_devices:
   - {name: Steam Controller receivers, vid: "28de"}
   - {name: Flydigi receivers, vid: "37d7"}
+  - {name: Riitek mini keyboard, vid: "1997", pid: "2433"}
   - {name: 8BitDo receivers, vid: "2dc8"}
   - {name: XInput-mode receivers, vid: "045e", pid: "028e"}
   - {name: Some dongle, vid: "1234", pid: "5678"}   # your real ID
