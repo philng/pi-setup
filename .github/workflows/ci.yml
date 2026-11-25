@@ -165,6 +165,9 @@ jobs:
       - name: Client auto-attach tests
         if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.client_tests == 'true' }}
         run: tests/client/test-autoattach.sh
+      - name: Windows client stream tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.client_tests == 'true' }}
+        run: tests/client/test-windows-stream.sh
       - name: OctoPrint device detection tests
         if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.octoprint_tests == 'true' }}
         run: tests/octoprint/test-devices.sh
