@@ -1,4 +1,5 @@
 # Managed by Ansible (network role). Credentials come from secrets/wifi.yml.
+{# Keyfile values treat a backslash as an escape, so double any in the values. #}
 [connection]
 id={{ network_wifi_connection }}
 type=wifi
@@ -10,12 +11,12 @@ autoconnect-priority=10
 
 [wifi]
 mode=infrastructure
-ssid={{ network_wifi_ssid }}
+ssid={{ network_wifi_ssid | replace('\\', '\\\\') }}
 
 {% if network_wifi_password | length > 0 %}
 [wifi-security]
 key-mgmt=wpa-psk
-psk={{ network_wifi_password }}
+psk={{ network_wifi_password | replace('\\', '\\\\') }}
 
 {% endif %}
 [ipv4]
