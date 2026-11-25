@@ -74,6 +74,7 @@ passes when every job passed or was skipped, so it is the one to require.
 What CI can't prove is checked by hand on the Pis:
 
 - [usbip server](02-usbip-server.md#smoke-test-on-the-real-pi) (`pilab-living`, `pilab-rack`)
+- [VirtualHere](virtualhere.md#smoke-test-on-the-real-pi) (a USB Pi switched to `usb_server: virtualhere`)
 - [OctoPrint](octoprint.md#5-smoke-test-on-the-real-pi) (`octopi`)
 - [Tailscale](tailscale.md#smoke-test-on-the-real-pis) (every Pi)
 - [Settings re-applied to deployed Pis](changing-settings.md#smoke-test-on-the-real-pis) (every Pi)
@@ -84,8 +85,9 @@ What CI can't prove is checked by hand on the Pis:
   setup through cloud-init, and what USBAnywhere's Pi fixes are tested on.
 - **One repo, one Ansible role per service.** New services are new roles; new Pis are
   new inventory groups.
-- **Host vs. containers.** usbip runs on the host (it is kernel modules plus a daemon
-  that owns the USB hardware). Other services run as rootless Podman containers
-  managed by Quadlet, so each one is a normal systemd unit.
+- **Host vs. containers.** usbip and VirtualHere run on the host, because each owns the
+  Pi's USB hardware (usbip is kernel modules plus a daemon; VirtualHere ships a native
+  binary and systemd unit). Other services run as rootless Podman containers managed
+  by Quadlet, so each one is a normal systemd unit.
 - **SD card now, USB SSD later.** Moving to the SSD is "flash the SSD, re-run Ansible",
   not cloning.

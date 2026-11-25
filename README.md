@@ -166,6 +166,7 @@ More detail: [how your computer finds the Pis](docs/01-base-image.md#how-your-co
 - [Base setup and USB/IP server](docs/02-usbip-server.md): what the base and usbip
   roles do, adding a dongle, renaming the old `pilab`
 - [Gaming PC setup](docs/03-client.md): auto-attach on Linux, attach-while-streaming with Vibepollo on Windows
+- [VirtualHere instead of usbip](docs/virtualhere.md): optional, per Pi, with the Windows client as a service
 - [Health check and moving to the SSD](docs/04-ssd.md)
 - [OctoPrint](docs/octoprint.md): overrides, plugins, firmware updates, webcam focus, backups
 - [Running the setup from Windows (WSL)](docs/windows.md)

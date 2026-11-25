@@ -1,0 +1,56 @@
+---
+# VirtualHere USB Server, an alternative to usbip for the controller dongles.
+# Off unless a host sets usb_server: virtualhere (see inventory/group_vars/usbip.yml);
+# usbip and VirtualHere never run at the same time on one Pi.
+#
+# Licensing: without a licence the server shares ONE device at a time (the free
+# trial). A licence ($49, bought from virtualhere.com) is bound to the Pi's
+# hardware and removes the limit. Run exactly one server per Pi: running extra
+# servers or containers to get more free devices breaks VirtualHere's licence.
+
+# VirtualHere's own arm64 build, as its install script uses. VirtualHere
+# publishes no checksums or versioned URLs; set a "sha256:..." here to pin the
+# build you have tested (make apply then stops if the download differs).
+virtualhere_binary_url: https://www.virtualhere.com/sites/default/files/usbserver/vhusbdarm64
+virtualhere_binary_checksum: ""
+virtualhere_binary: /usr/local/sbin/vhusbdarm64
+# true: download again on every apply (picks up VirtualHere's new releases).
+# false: keep the build already on the Pi.
+virtualhere_update: false
+
+virtualhere_config_dir: /usr/local/etc/virtualhere
+# The server's TCP port. VirtualHere only lets licensed servers change it.
+virtualhere_port: 7575
+# The name the Windows client shows for this Pi.
+virtualhere_server_name: "{{ inventory_hostname }}"
+
+# Only these devices are shared (VirtualHere's AllowedDevices). Same format as
+# usbip_devices: vid required, pid optional (omit for every product of that
+# vendor). Never empty: an empty list would share everything, the boot SSD too.
+virtualhere_devices:
+  - name: Valve Steam Controller receivers and wired Steam Controller
+    vid: "28de"
+  - name: 8BitDo receivers (all models)
+    vid: "2dc8"
+  - name: Flydigi receivers (all models)
+    vid: "37d7"
+  - name: Riitek wireless mini keyboard with touchpad
+    vid: "1997"
+    pid: "2433"
+  - name: XInput-mode receivers (8BitDo, Flydigi Vader in X mode)
+    vid: "045e"
+    pid: "028e"
+
+# The licence key is a secret: it lives on YOUR computer, in this git-ignored
+# file (one line, as VirtualHere emailed it). No file: the server runs as the
+# free trial, or keeps a licence you entered from the Windows client.
+virtualhere_license_file: "{{ playbook_dir }}/../secrets/virtualhere-license-{{ inventory_hostname }}"
+virtualhere_license: >-
+  {{ lookup('ansible.builtin.file', virtualhere_license_file)
+     if virtualhere_license_file is file else '' }}
+
+# Start the server. Off automatically inside containers (Molecule) where there
+# is no real USB bus to claim.
+virtualhere_start: >-
+  {{ ansible_facts['virtualization_type'] | default('')
+     not in ['docker', 'podman', 'container', 'containerd'] }}

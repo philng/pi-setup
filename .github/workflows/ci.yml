@@ -74,6 +74,7 @@ jobs:
               - client/linux/*.sh
               - client/linux/usbip-autoattach
               - ansible/roles/octoprint/files/octoprint-devices
+              - ansible/roles/virtualhere/files/virtualhere-config
               - tests/**/*.sh
               - .github/scripts/*.sh
               - .githooks/pre-commit

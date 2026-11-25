@@ -1,0 +1,17 @@
+---
+# A Pi that ran usbip until now, switched to VirtualHere in converge.yml. Plus a
+# made-up licence key on "your computer", like secrets/virtualhere-license-<host>.
+- name: Prepare
+  hosts: all
+  become: true
+  roles:
+    - base
+    - usbip
+  post_tasks:
+    - name: Write a fake licence file on the controller
+      ansible.builtin.copy:
+        dest: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/virtualhere-license"
+        content: "FAKE-LICENCE-FOR-TESTS\n"
+        mode: "0600"
+      delegate_to: localhost
+      become: false

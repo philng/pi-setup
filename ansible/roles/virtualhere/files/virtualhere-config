@@ -1,0 +1,21 @@
+#!/bin/sh
+# Merge Ansible's settings into VirtualHere's config.ini before the server starts.
+#   virtualhere-config MANAGED CONFIG
+# The server rewrites config.ini itself (nicknames, a licence entered from the
+# client, ...), so Ansible can't own the whole file. Every key=value line in
+# MANAGED replaces the same key in CONFIG (keys are case-insensitive, as
+# VirtualHere reads them); all other lines in CONFIG are kept.
+set -eu
+managed=$1
+config=$2
+[ -f "$config" ] || : > "$config"
+tmp=$(mktemp "$config.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+awk -F= '
+  NR == FNR { if ($0 ~ /^[A-Za-z]/) { mine[tolower($1)] = 1; keep[++n] = $0 } next }
+  !(tolower($1) in mine)
+  END { for (i = 1; i <= n; i++) print keep[i] }
+' "$managed" "$config" > "$tmp"
+chmod 600 "$tmp"
+mv "$tmp" "$config"
+trap - EXIT

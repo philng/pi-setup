@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+# Merged into config.ini by virtualhere-config each time the server starts.
+ServerName={{ virtualhere_server_name }}
+AllowedDevices={% for d in virtualhere_devices %}{{ d.vid | lower | regex_replace('^0+(?=.)', '') }}/{{ (d.pid | lower | regex_replace('^0+(?=.)', '')) if d.pid is defined else '*' }}{{ '' if loop.last else ',' }}{% endfor %}
+
+{% if virtualhere_license | length > 0 %}
+License={{ virtualhere_license }}
+{% endif %}

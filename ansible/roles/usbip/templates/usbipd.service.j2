@@ -3,6 +3,8 @@
 Description=USB/IP server daemon
 After=network-online.target systemd-modules-load.service
 Wants=network-online.target
+# Never alongside VirtualHere (the virtualhere role), which shares the same dongles.
+Conflicts=virtualhere.service
 
 [Service]
 Type=simple
