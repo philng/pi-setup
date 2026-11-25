@@ -1,9 +1,13 @@
 # Wired Ethernet with DHCP. Give the Pi a DHCP reservation on your router so
 # its address never changes. The repo reaches it by its plain hostname (router DNS).
+# scripts/configure-boot.sh appends a wifis: block when you ask for Wi-Fi; its
+# route-metric is 600, so Ethernet (100) is preferred whenever it's plugged in.
 network:
   version: 2
   renderer: NetworkManager
   ethernets:
     eth0:
       dhcp4: true
+      dhcp4-overrides:
+        route-metric: 100
       optional: true

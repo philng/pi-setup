@@ -1,7 +1,8 @@
 # Step 1: Base image
 
 Goal: a fresh Raspberry Pi 4 B that boots Raspberry Pi OS Lite 64-bit, joins the
-network over Ethernet, and accepts SSH from your key, with no keyboard or monitor.
+network over Ethernet (and optionally Wi-Fi), and accepts SSH from your key, with
+no keyboard or monitor.
 After that, Ansible does the rest.
 
 ## What you need
@@ -46,8 +47,8 @@ It walks you through the rest and explains each step:
    `/run/media/$USER/bootfs` on Linux (offering to mount it with `udisksctl` if Sway
    didn't), or in WSL by asking Windows which drive is labelled `bootfs` and
    offering to mount it (for example `E:` at `/mnt/e`, with sudo). If it can't
-   find one, it asks for the path or drive letter. After a summary and a yes, it runs `configure-boot.sh` and
-   offers to eject.
+   find one, it asks for the path or drive letter. After a summary and a yes, it runs `configure-boot.sh`
+   (which asks whether to add [Wi-Fi](#wi-fi-optional)) and offers to eject.
 5. **First boot.** Put the card in the Pi, plug in Ethernet and power, press Enter,
    and it waits until `ssh admin@<name>` works, with a plain-English hint if
    it doesn't (not on the network yet, key refused, old host key). Then it prints
@@ -122,9 +123,65 @@ SSH key, disable password login and turn on SSH.
 
 Eject the drive (Finder, File Explorer, or `udisksctl unmount -b /dev/sdX1` on Linux).
 
+## Wi-Fi (optional)
+
+Ethernet is always set up, and it's what this repo expects for the usbip Pis
+(latency). Wi-Fi can be added as well, for a Pi that sits away from a cable or as
+a fallback. When both are connected, Ethernet wins: `eth0` gets route metric 100
+and `wlan0` 600, so traffic only goes over Wi-Fi when the cable is unplugged.
+
+Three ways to give it the network, checked in this order:
+
+1. **Environment:** `WIFI_SSID`, `WIFI_PASSWORD` and optionally `WIFI_COUNTRY`
+   (two letters, default `PI_WIFI_COUNTRY` in `bootstrap/pi.env`, `US`). Prefer
+   the file below to typing a password on the command line, where it lands in
+   your shell history.
+2. **`secrets/wifi.yml`** in the repo folder. `secrets/` is git-ignored, so it is
+   never committed; keep it `chmod 600`. Ansible reads the same file.
+
+   ```yaml
+   wifi_ssid: "Home Net"
+   wifi_password: "your password"
+   wifi_country: "US"
+   ```
+
+3. **Asked:** run from a terminal (or `make new-pi` without `--yes`),
+   `configure-boot.sh` asks *Set up Wi-Fi too?* (default no), then the network
+   name, the password (not shown as you type) and the country. It then offers to
+   save them to `secrets/wifi.yml` (default no).
+
+If you set up Wi-Fi in Raspberry Pi Imager anyway, it is kept (with its country)
+unless you give another network. `WIFI=off` (or `make new-pi ARGS=--no-wifi`)
+means Ethernet only: no question, and Imager's Wi-Fi is dropped with a warning.
+
+The password is written only to the card, never printed or logged. Like Imager,
+it sits in plain text in `network-config` (and `network-config.orig` if Imager
+wrote one) on the card's `bootfs` partition, readable by anyone holding the
+card; on the Pi, cloud-init copies it to `/etc/netplan/50-cloud-init.yaml`,
+readable only by root. The country goes into `network-config`
+(`regulatory-domain`) and `user-data` runs `raspi-config nonint do_wifi_country`
+on first boot, which also unblocks the radio Pi OS keeps off until a country is
+set. Supported: WPA2/WPA3 personal (8 to 63 characters, or a 64-digit hex key).
+Open and enterprise networks aren't.
+
+Give the Pi a DHCP reservation for its Wi-Fi MAC address too, so its name keeps
+resolving whichever interface is up.
+
+### Smoke test: Wi-Fi on the real Pi
+
+Hardware only, so not in CI (the tests check the files written to the card):
+
+- [ ] `ssh admin@<name> nmcli -f DEVICE,STATE device` shows `eth0` and `wlan0`
+      both `connected`.
+- [ ] `ip route show default` lists `eth0` with metric 100 before `wlan0` with 600.
+- [ ] `iw reg get` shows your country, and `rfkill list wifi` says
+      `Soft blocked: no`.
+- [ ] Unplug Ethernet: within a minute `ssh admin@<name>` still works (over Wi-Fi).
+      Plug it back in and the default route returns to `eth0`.
+
 ## 4. First boot
 
-Insert the card, plug in Ethernet, then power. Give it 2 to 3 minutes (cloud-init
+Insert the card, plug in Ethernet (or rely on Wi-Fi if you added it), then power. Give it 2 to 3 minutes (cloud-init
 runs on first boot only). Then, from the repo on your computer (on Windows, in the
 WSL Ubuntu window, see [windows.md](windows.md)):
 

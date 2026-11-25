@@ -20,6 +20,10 @@
 # With no SSH_PUBKEY_FILE and no ~/.ssh/id_ed25519.pub it looks for another key
 # (in ~/.ssh, then in WSL in Windows' C:\Users\*\.ssh) and offers to use it, or
 # to create one. Those questions are only asked when run from a terminal.
+#
+# Wi-Fi is optional: from a terminal it asks, or pass WIFI_SSID, WIFI_PASSWORD
+# and WIFI_COUNTRY in the environment (see "Wi-Fi" below). Ethernet is always
+# set up and preferred when plugged in.
 set -euo pipefail
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -161,11 +165,153 @@ for f in user-data network-config; do
     cp "$BOOT/$f" "$BOOT/$f.orig"
   fi
 done
-# This setup is Ethernet only. If Wi-Fi was set in Imager, say we're replacing it
-# rather than leave a Pi that never joins the network.
-if grep -qs '^[[:space:]]*wifis:' "$BOOT/network-config.orig"; then
-  echo "warning: Raspberry Pi Imager set up Wi-Fi on this card, but this repo's network-config" >&2
-  echo "         is Ethernet only and replaces it. The Pi must be plugged into Ethernet." >&2
+# --- Wi-Fi (optional) ----------------------------------------------------------
+# Ethernet always works and is preferred when plugged in (lower route metric).
+# Wi-Fi is added only if you ask for it:
+#   WIFI_SSID=... WIFI_PASSWORD=... [WIFI_COUNTRY=GB] scripts/configure-boot.sh ...
+# or put them in secrets/wifi.yml (git-ignored; Ansible reads it too):
+#   wifi_ssid: "..."
+#   wifi_password: "..."
+#   wifi_country: "US"
+# or answer the question asked when run from a terminal. If Raspberry Pi Imager
+# set up Wi-Fi on this card, that is kept unless you give another network.
+# WIFI=off: Ethernet only, no question, and Imager's Wi-Fi is dropped too.
+# WIFI_ASK=0: don't ask (make new-pi asks itself, then sets this).
+# The password is only ever written to the card: never printed or logged.
+WIFI=${WIFI:-}
+WIFI_SSID=${WIFI_SSID:-}
+WIFI_PASSWORD=${WIFI_PASSWORD:-}
+WIFI_COUNTRY=${WIFI_COUNTRY:-${PI_WIFI_COUNTRY:-US}}
+WIFI_BLOCK='' WIFI_FROM=''
+WIFI_FILE=${WIFI_FILE:-$REPO_ROOT/secrets/wifi.yml}
+
+# The wifis: block (with everything under it) of a network-config, if any.
+wifis_block() {
+  [[ -f $1 ]] || return 0
+  awk '
+    /^  wifis:[[:space:]]*$/ { on = 1; print; next }
+    on && /^[[:space:]]*$/ { next }
+    on && /^   / { print; next }
+    on { exit }
+  ' "$1"
+}
+# YAML double-quoted string.
+yq() { printf '"%s"' "$(printf '%s' "$1" | sed 's/[\\"]/\\&/g')"; }
+# The inside of a YAML double-quoted string: \" and \\ (all yq writes).
+unescape_dq() {
+  local in=$1 out=''
+  while [[ -n $in ]]; do
+    if [[ ${in:0:1} == "\\" ]]; then out=$out${in:1:1}; in=${in:2}
+    else out=$out${in:0:1}; in=${in:1}; fi
+  done
+  printf '%s' "$out"
+}
+# yaml_get FILE KEY: a flat "key: value" from a simple YAML file, unquoted.
+yaml_get() {
+  local v
+  v=$(sed -n "s/^$2:[[:space:]]*//p" "$1" | head -n1 | tr -d '\r')
+  v=${v%"${v##*[![:space:]]}"}
+  case $v in
+    \"*\") v=${v#\"}; v=${v%\"}; v=$(unescape_dq "$v") ;;
+    \'*\') v=${v#\'}; v=${v%\'}; v=$(printf '%s' "$v" | sed "s/''/'/g") ;;
+  esac
+  printf '%s' "$v"
+}
+save_wifi() {
+  local old
+  old=$(umask); umask 077
+  mkdir -p "$(dirname "$WIFI_FILE")"
+  printf 'wifi_ssid: %s\nwifi_password: %s\nwifi_country: %s\n' \
+    "$(yq "$WIFI_SSID")" "$(yq "$WIFI_PASSWORD")" "$(yq "$WIFI_COUNTRY")" > "$WIFI_FILE"
+  umask "$old"
+  chmod 600 "$WIFI_FILE"
+  echo "Saved to $WIFI_FILE (readable only by you; secrets/ is git-ignored)." >&2
+}
+valid_ssid() { [[ -n $1 && ${#1} -le 32 && $1 != *[[:cntrl:]]* ]]; }
+# WPA2/WPA3 personal: 8 to 63 printable characters, or 64 hex digits.
+valid_psk() { [[ $1 != *[[:cntrl:]]* ]] && { [[ ${#1} -ge 8 && ${#1} -le 63 ]] || [[ $1 =~ ^[0-9A-Fa-f]{64}$ ]]; }; }
+# confirm_no "Question": no by default, and no without a terminal.
+confirm_no() {
+  local ans=''
+  interactive || return 1
+  printf '%s [y/N]: ' "$1" >&2
+  IFS= read -r ans || { echo >&2; return 1; }
+  case $ans in [Yy]*) return 0 ;; *) return 1 ;; esac
+}
+ask_wifi() {
+  local ans=''
+  while :; do
+    printf 'Wi-Fi network name (SSID): ' >&2
+    IFS= read -r WIFI_SSID || die "no Wi-Fi network name given"
+    valid_ssid "$WIFI_SSID" && break
+    echo "That isn't a valid network name (1 to 32 characters)." >&2
+  done
+  while :; do
+    printf 'Wi-Fi password (not shown): ' >&2
+    IFS= read -rs WIFI_PASSWORD || die "no Wi-Fi password given"
+    echo >&2
+    valid_psk "$WIFI_PASSWORD" && break
+    echo "A Wi-Fi password is 8 to 63 characters (or 64 hex digits)." >&2
+  done
+  printf 'Wi-Fi country, two letters [%s]: ' "$WIFI_COUNTRY" >&2
+  IFS= read -r ans || ans=''
+  [[ -z $ans ]] || WIFI_COUNTRY=$ans
+  WIFI_ASKED=1
+}
+WIFI_ASKED=0
+
+IMAGER_WIFI=$(wifis_block "$BOOT/network-config.orig")
+case $WIFI in
+  '' | ask | on) ;;
+  off) WIFI_SSID='' IMAGER_WIFI='' ;;
+  *) die "WIFI must be off or unset, not '$WIFI'" ;;
+esac
+if [[ -z $WIFI_SSID && $WIFI != off && -f $WIFI_FILE ]]; then
+  WIFI_SSID=$(yaml_get "$WIFI_FILE" wifi_ssid)
+  WIFI_PASSWORD=$(yaml_get "$WIFI_FILE" wifi_password)
+  c=$(yaml_get "$WIFI_FILE" wifi_country)
+  [[ -z $c ]] || WIFI_COUNTRY=$c
+  [[ -n $WIFI_SSID ]] || die "$WIFI_FILE has no wifi_ssid"
+  echo "Using Wi-Fi from $WIFI_FILE (WIFI=off to skip it)." >&2
+fi
+if [[ -z $WIFI_SSID && $WIFI != off && ${WIFI_ASK:-1} != 0 ]]; then
+  if [[ -n $IMAGER_WIFI ]]; then
+    echo "Raspberry Pi Imager set up Wi-Fi on this card; it will be kept." >&2
+    if confirm_no "Replace it with another Wi-Fi network?"; then ask_wifi; fi
+  elif confirm_no "Set up Wi-Fi too (Ethernet is still used when plugged in)?"; then
+    ask_wifi
+  fi
+fi
+if [[ -n $WIFI_SSID ]]; then
+  valid_ssid "$WIFI_SSID" || die "WIFI_SSID must be 1 to 32 characters"
+  [[ -n $WIFI_PASSWORD ]] || die "WIFI_SSID is set but WIFI_PASSWORD isn't (open networks aren't supported)"
+  valid_psk "$WIFI_PASSWORD" || die "WIFI_PASSWORD must be 8 to 63 characters, or 64 hex digits"
+  WIFI_COUNTRY=$(printf '%s' "$WIFI_COUNTRY" | tr '[:lower:]' '[:upper:]')
+  [[ $WIFI_COUNTRY =~ ^[A-Z]{2}$ ]] || die "WIFI_COUNTRY must be a two-letter country code like US or GB, not '$WIFI_COUNTRY'"
+  WIFI_FROM="network $WIFI_SSID, country $WIFI_COUNTRY"
+  if [[ $WIFI_ASKED -eq 1 ]] && confirm_no "Save it to ${WIFI_FILE#"$REPO_ROOT"/} for next time and for Ansible?"; then
+    save_wifi
+  fi
+  # route-metric 600 (NetworkManager's usual for Wi-Fi) vs eth0's 100: Ethernet wins.
+  WIFI_BLOCK="  wifis:
+    wlan0:
+      dhcp4: true
+      dhcp4-overrides:
+        route-metric: 600
+      optional: true
+      regulatory-domain: $(yq "$WIFI_COUNTRY")
+      access-points:
+        $(yq "$WIFI_SSID"):
+          password: $(yq "$WIFI_PASSWORD")"
+elif [[ -n $IMAGER_WIFI ]]; then
+  WIFI_BLOCK=$IMAGER_WIFI
+  c=$(printf '%s\n' "$IMAGER_WIFI" | sed -n 's/^[[:space:]]*regulatory-domain:[[:space:]]*//p' | tr -d "\"' \r" | head -n1)
+  [[ ! $c =~ ^[A-Za-z]{2}$ ]] || WIFI_COUNTRY=$(printf '%s' "$c" | tr '[:lower:]' '[:upper:]')
+  WIFI_FROM="kept from Raspberry Pi Imager, country $WIFI_COUNTRY"
+  [[ $WIFI_COUNTRY =~ ^[A-Z]{2}$ ]] || die "WIFI_COUNTRY must be a two-letter country code like US or GB"
+elif grep -qs '^[[:space:]]*wifis:' "$BOOT/network-config.orig"; then
+  echo "warning: Raspberry Pi Imager set up Wi-Fi on this card, but it's being replaced" >&2
+  echo "         with Ethernet only. The Pi must be plugged into Ethernet." >&2
 fi
 
 esc() { printf '%s' "$1" | sed 's/[&|\\]/\\&/g'; }
@@ -176,6 +322,17 @@ sed -e "s|@PI_HOSTNAME@|$(esc "$PI_HOSTNAME")|g" \
     -e "s|@SSH_PUBKEY@|$(esc "$SSH_PUBKEY")|g" \
     "$REPO_ROOT/bootstrap/cloud-init/user-data.tmpl" > "$BOOT/user-data"
 cp "$REPO_ROOT/bootstrap/cloud-init/network-config" "$BOOT/network-config"
+if [[ -n $WIFI_BLOCK ]]; then
+  printf '%s\n' "$WIFI_BLOCK" >> "$BOOT/network-config"
+  # Pi OS keeps the Wi-Fi radio blocked until a country is set; this sets it
+  # and unblocks it.
+  cat >> "$BOOT/user-data" <<EOF
+
+# Wi-Fi: set the country, which also unblocks the radio (added by configure-boot.sh).
+runcmd:
+  - [raspi-config, nonint, do_wifi_country, "$WIFI_COUNTRY"]
+EOF
+fi
 [[ -f $BOOT/meta-data ]] || printf 'instance-id: %s\n' "$PI_HOSTNAME" > "$BOOT/meta-data"
 grep -q '^#cloud-config' "$BOOT/user-data" || die "user-data render failed"
 # macOS leaves ._* metadata files on FAT drives; tidy them up if we can.
@@ -184,6 +341,7 @@ sync
 
 echo "Wrote user-data and network-config to $BOOT"
 echo "  hostname=$PI_HOSTNAME user=$PI_USER key=$SSH_PUBKEY_FILE"
+echo "  network: Ethernet${WIFI_FROM:+, and Wi-Fi ($WIFI_FROM)}"
 # WSL: let go of the drive we mounted, or Windows says it's in use and won't eject
 # it (and pulling it out anyway can lose the files just written).
 if [[ $MOUNTED -eq 1 ]]; then
@@ -193,4 +351,8 @@ if [[ $MOUNTED -eq 1 ]]; then
     echo "warning: couldn't unmount $BOOT; run: sudo umount $BOOT, then eject $LETTER in Windows" >&2
   fi
 fi
-echo "Eject the card/SSD, put it in the Pi, connect Ethernet (Wi-Fi isn't set up) and power on."
+if [[ -n $WIFI_BLOCK ]]; then
+  echo "Eject the card/SSD, put it in the Pi and power on (Ethernet is used when plugged in)."
+else
+  echo "Eject the card/SSD, put it in the Pi, connect Ethernet (Wi-Fi isn't set up) and power on."
+fi
