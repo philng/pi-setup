@@ -52,9 +52,9 @@ git clone https://github.com/philng/pi-setup.git
 cd pi-setup
 ```
 
-The repo is private, so git asks you to sign in. Use a GitHub personal access token
-as the password, or install the [GitHub CLI](https://cli.github.com/) in Ubuntu
-and run `gh auth login` first.
+The repo is public, so no sign-in is needed to clone it. To push changes, use a
+GitHub personal access token as the password, or install the
+[GitHub CLI](https://cli.github.com/) in Ubuntu and run `gh auth login` first.
 
 ## 4. SSH key (once)
 

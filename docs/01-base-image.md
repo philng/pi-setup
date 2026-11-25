@@ -15,7 +15,7 @@ After that, Ansible does the rest.
 - An SSH key at `~/.ssh/id_ed25519.pub` (create with `ssh-keygen -t ed25519`, or let
   `make new-pi` create one; on Windows, in WSL)
 - To run Ansible afterwards: `git`, `make` and [mise](https://mise.jdx.dev) on
-  Linux or macOS (see [Tools on your computer](../README.md#tools-on-your-computer));
+  Linux or macOS (see [Tools on your computer](../README.md#1-tools-on-your-computer));
   `make` installs the pinned Ansible into the repo's `.venv/` itself. On Windows,
   everything except Imager runs in WSL: set that up first with [Windows (WSL)](windows.md).
   All `make` commands run on this computer, never on the Pi.
@@ -66,7 +66,7 @@ Edit [`bootstrap/pi.env`](../bootstrap/pi.env) if you want a different default
 hostname or timezone. The login user isn't there: it is `ansible_user` in
 `ansible/inventory/group_vars/pis.yml`, and `configure-boot` reads it from there so
 the Pi and Ansible always agree. A new hostname also needs an entry in
-`ansible/inventory/hosts.yml`, under `usbip` or `printers` (`configure-boot` warns
+`ansible/inventory/hosts.yml`, under `usbip`, `printers` or `general` (`configure-boot` warns
 if it's missing).
 
 ## 2. Flash with Raspberry Pi Imager
@@ -150,9 +150,6 @@ not used: WSL usually can't resolve them, and anything on the LAN can answer for
   for example `ansible_host: 192.168.1.50`, and pass the IP to
   `client/linux/install.sh` on the gaming PC. With a reservation, the IP is as
   stable as the name.
-
-`make apply` currently only checks the OS and architecture. The real
-configuration arrives with the roles in step 2.
 
 ## Troubleshooting
 

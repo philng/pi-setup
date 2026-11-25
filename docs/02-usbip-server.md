@@ -112,7 +112,7 @@ bootloader, real USB) are checked by the smoke test below on the actual Pi.
 
 Run it locally with `make molecule ROLE=usbip`, which installs the pinned Molecule
 into the repo's `.venv/` the first time (needs Docker or Podman, see
-[Testing before you push](../README.md#testing-before-you-push)).
+[Testing before you push](development.md#testing-before-you-push)).
 
 ## Smoke test on the real Pi
 

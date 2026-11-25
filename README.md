@@ -1,108 +1,113 @@
 # pi-setup
 
 Reproducible config for my Raspberry Pi homelab. Everything needed to rebuild any of
-the Pis from a blank SD card or SSD lives here.
+the Pis from a blank SD card or SSD lives here, applied with Ansible from your own
+computer.
 
-- **USB-over-IP server** (`pilab-living`): 2.4 GHz controller dongles plug into a Pi
-  by the TV, and the gaming PC (Fedora Sway Atomic, sometimes Windows) attaches them
-  over the network so they work in Moonlight/Sunshine streams as if they were plugged
-  in locally.
-- **OctoPrint** (`octopi`): a second Pi runs OctoPrint for the 3D printer
-  ([docs/octoprint.md](docs/octoprint.md)).
-- **Shared roles only** (`pilab-rack`): a Pi that gets the common setup and nothing else.
+| Host | What it does | Inventory group | Roles |
+| --- | --- | --- | --- |
+| `pilab-living` (by the TV) | **USB-over-IP server**: 2.4 GHz controller dongles plug in here, and the gaming PC attaches them over the network so they work in Moonlight/Sunshine streams as if plugged in locally | `usbip` | base, tailscale, usbip, dotfiles |
+| `octopi` | **OctoPrint** for the Prusa MK3S+, with OctoEverywhere and a webcam | `printers` | base, tailscale, podman, octoprint, dotfiles |
+| `pilab-rack` | Shared roles only | `general` | base, tailscale, dotfiles |
 
-## Hosts and roles
+## Quickstart
 
-| Host | Inventory group | Roles |
-| --- | --- | --- |
-| `pilab-living` (by the TV) | `usbip` | base, tailscale, usbip, dotfiles |
-| `pilab-rack` | `general` | base, tailscale, dotfiles |
-| `octopi` | `printers` | base, tailscale, podman, octoprint, dotfiles |
+This takes a blank SD card or USB SSD to a fully configured Pi. Every command runs
+on **your own computer** (Linux, macOS, or WSL on Windows), never on the Pi: Ansible
+connects to the Pis over SSH.
 
-Only `pilab-living` gets usbip; `general` is for Pis that only get the shared roles.
+**You need:** a Raspberry Pi 4 B, the official 3 A USB-C power supply, an
+**Ethernet cable** to your router, an SD card (16 GB+) or a USB 3 SSD, and a computer
+with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) 2.x.
 
-`ansible/inventory/hosts.yml` lists only the Pis you actually have: `make new-pi` adds
-each one as you set it up, so every `make` target works with any subset of the Pis.
-If a Pi isn't built yet, take it out of the inventory until `make new-pi` adds it back.
-
-Every Pi gets these shared roles:
-
-- **base**: hostname, firewall, key-only SSH, fail2ban and more
-  ([details](docs/02-usbip-server.md#what-the-base-role-does-every-pi)).
-- **[tailscale](docs/tailscale.md)**: the first `make apply` prints a login link for
-  each Pi, and once you open it `ssh admin@octopi` works from anywhere on your tailnet.
-- **dotfiles**: zsh as the `admin` login shell, vim, and
-  [philng/dotfiles](https://github.com/philng/dotfiles) cloned to `~/.dotfiles` with its
-  `home/` files linked into `~` (existing files are kept as `<file>.pre-dotfiles`).
-  Antidote and vim-plug are installed and the plugins fetched, so the first login is
-  ready. Re-run `make apply` to pull dotfile changes.
-
-## What's in the repo
-
-| Path | What it is |
-| --- | --- |
-| `bootstrap/` | First-boot settings (cloud-init) written onto the boot partition when flashing |
-| `scripts/new-pi.sh` (`make new-pi`) | Guided setup for a new or re-flashed Pi: asks its role and name, adds it to the inventory, writes the card, waits for first boot |
-| `scripts/configure-boot.sh` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows (in WSL, where it also mounts the card and finds your Windows SSH key) |
-| `ansible/` | Everything after first boot: one role per service, applied with `make apply` |
-| `client/` | Gaming PC side of usbip ([docs/03-client.md](docs/03-client.md)) |
-| `docs/` | Step-by-step guides (see [Guides](#guides)) |
-| `molecule/`, `ansible/roles/*/molecule/` | Role tests in an arm64 Debian container (`make molecule ROLE=<role>`, and in CI) |
-
-## Tools on your computer
-
-All `make` commands run on **your own computer** (Linux, macOS, or WSL on Windows),
-never on the Pi: Ansible connects to the Pis over SSH.
+### 1. Tools on your computer
 
 You need `git`, `make` and [mise](https://mise.jdx.dev). Nothing else is installed
-globally.
+globally: the first `make` installs the pinned Python and Ansible into the repo
+([how](docs/development.md#how-the-tools-are-pinned)).
 
 | Computer | Install once |
 | --- | --- |
-| Fedora Atomic (Silverblue, Sway Atomic, ...) | `git` and `make` are on the host. `curl https://mise.run \| sh` installs mise to `~/.local/bin`, so you don't need layering or a toolbox. Run `make` on the host, not in a toolbox, so the Molecule tests can reach Podman |
-| Other Linux | `git`, `make` and `curl` from your package manager, then the mise line above |
+| Fedora Atomic (Silverblue, Sway Atomic, ...) | `git` and `make` are on the host. `curl https://mise.run \| sh` installs mise to `~/.local/bin`, with no layering or toolbox |
+| Other Linux | `git`, `make` and `curl` from your package manager, then `curl https://mise.run \| sh` |
 | macOS | `xcode-select --install` (git, make), then `brew install mise` |
-| Windows | Everything except Raspberry Pi Imager runs in WSL: follow [docs/windows.md](docs/windows.md) |
+| Windows | Install WSL and the tools by following [docs/windows.md](docs/windows.md) steps 1 to 3. Imager runs in Windows; everything else runs in the WSL Ubuntu window |
 
-The first `make` target that needs Ansible runs `mise install`, which gets the Python
-and uv versions pinned in `mise.toml`. It then creates `.venv/` in the repo with the
-exact Ansible versions locked in `requirements.txt`, plus the Ansible collections in
-`ansible/.collections/`. Your laptop, WSL and CI all run the same versions, and `make`
-uses them without you activating anything. Run `make deps` to set everything up ahead
-of time.
-
-Optional: [activate mise in your shell](https://mise.jdx.dev/getting-started.html#activate-mise)
-and run `mise trust` once in the repo. After that, `cd`-ing into the repo activates
-`.venv`, so `ansible`, `ansible-lint` and `molecule` work directly too.
-
-### Updating the pinned versions
-
-To move to a newer Ansible, edit the version in `requirements.in` (or the dev tools in
-`requirements-dev.in`), run `make lock`, and commit both files. For Python or uv, edit
-`mise.toml`. Everyone's next `make` picks up the change.
-
-## Set up a Pi
-
-1. Flash **Raspberry Pi OS Lite (64-bit)** with Raspberry Pi Imager (no customisation).
-2. Re-plug the card/SSD, then run `make new-pi`. It asks what the Pi is for and its
-   name, adds it to the inventory, writes the first-boot settings, waits for the Pi to
-   boot, and runs Ansible.
-
-Or by hand:
+### 2. Get the repo
 
 ```bash
-scripts/configure-boot.sh /run/media/$USER/bootfs   # first-boot settings (macOS: /Volumes/bootfs,
-                                                     # Windows, in WSL: E:)
-make ping && make apply                              # after the Pi boots
+git clone https://github.com/philng/pi-setup.git
+cd pi-setup
 ```
 
-The default hostname is `pilab-living`; flash the others with e.g.
-`PI_HOSTNAME=octopi scripts/configure-boot.sh ...`, or pick their role in
-`make new-pi`. [docs/01-base-image.md](docs/01-base-image.md) has the full walkthrough,
-including how your computer finds the Pis by name.
+(On Windows, clone inside WSL's home folder, not under `/mnt/c`.)
 
-Then follow the guide for what the Pi does: [usbip server](docs/02-usbip-server.md)
-and [gaming PC](docs/03-client.md), or [OctoPrint](docs/octoprint.md).
+### 3. Flash the card or SSD
+
+In Raspberry Pi Imager: device **Raspberry Pi 4**, OS **Raspberry Pi OS (other) →
+Raspberry Pi OS Lite (64-bit)**, storage: your SD card or SSD. When it asks about
+customisation, choose **No**. Don't bother setting Wi-Fi there: this setup is
+**Ethernet only**, and the next step replaces Imager's network settings. Let it
+finish writing and verifying.
+
+### 4. Write the first-boot settings
+
+Unplug and re-plug the card or SSD, then:
+
+```bash
+make new-pi
+```
+
+It asks what the Pi is for (`usbip`, `printer` or `general`) and its hostname, adds it
+to `ansible/inventory/hosts.yml` (commit that change), picks or creates your SSH key
+(in WSL it can copy your Windows key), finds and mounts the card's `bootfs`
+partition, writes the settings, and offers to eject it. On Windows, also eject the
+drive in File Explorer before pulling it out.
+
+### 5. First boot
+
+1. Put the card in the Pi. **Booting from a USB SSD?** Remove any SD card from the Pi
+   first, or it boots from the card instead, and plug the SSD into a blue USB 3 port.
+2. Plug in Ethernet, then power.
+3. Press Enter in `make new-pi`. It waits until `ssh admin@<hostname>` works. The
+   first boot resizes the disk, runs cloud-init and reboots once, so give it 3 to 5
+   minutes.
+
+If it never answers, see [Finding the Pi on the network](#finding-the-pi-on-the-network)
+below.
+
+### 6. Configure it
+
+`make new-pi` offers to run Ansible for you. Or run it yourself:
+
+```bash
+make ping       # expect: <hostname> | SUCCESS => "ping": "pong"
+make apply      # configure every Pi; make apply LIMIT=octopi for just one
+```
+
+The first `make apply` on a Pi prints a **Tailscale login link**: open it and click
+Connect, then disable key expiry for the Pi in the admin console
+([details](docs/tailscale.md#joining-the-login-link)). After that,
+`ssh admin@<hostname>` works from anywhere on your tailnet.
+
+### 7. Finish for what the Pi does
+
+- **`usbip`:** plug the dongles into the Pi's black USB 2 ports, then on the gaming
+  PC run `sudo client/linux/install.sh` from this repo (on Fedora Atomic, run it again
+  after the reboot it asks for). Windows and details: [docs/03-client.md](docs/03-client.md).
+- **`printer`:** plug the printer (and webcam) into the black USB 2 ports, open
+  <http://octopi>, log in as `admin` with the password saved in
+  `secrets/octoprint-admin-octopi`, and run the setup wizard. Plugins, OctoEverywhere
+  and backups: [docs/octoprint.md](docs/octoprint.md).
+- **`general`:** nothing more to do.
+
+### 8. Check it
+
+```bash
+make health     # read-only report; fails if something needs attention
+```
+
+Then give the Pi a **DHCP reservation** on your router so its address never changes.
 
 ## Day to day
 
@@ -111,75 +116,59 @@ make                       # list every target
 make apply                 # configure the Pis after changing anything
 make apply LIMIT=octopi    # just one Pi (or group)
 make check                 # dry run with diff (a Pi needs one real make apply first)
-make health                # read-only health report, fails if something needs attention
+make health                # read-only health report
 make octoprint-backup      # copy OctoPrint settings to backups/octoprint/
 ```
 
-`make health` is described in [docs/04-ssd.md](docs/04-ssd.md#health-check).
-
-## Guides
-
-1. [Base image](docs/01-base-image.md): flash and first boot
-2. [Base setup and USB/IP server](docs/02-usbip-server.md)
-3. [Gaming PC setup](docs/03-client.md): auto-attach on Linux, USBAnywhere on Windows
-4. [Health check and moving to the SSD](docs/04-ssd.md)
-5. [OctoPrint on a second Pi](docs/octoprint.md)
-6. [Running the setup from Windows (WSL)](docs/windows.md)
-7. [Tailscale on every Pi](docs/tailscale.md), incl. joining the tailnet
-
-## Testing before you push
-
-Catch failures locally before CI does. `make lint` and `make test` add the pinned
-ansible-lint, yamllint, shellcheck and Molecule (`requirements-dev.txt`) to `.venv`
-the first time (or run `make deps-dev`); CI installs the same versions.
-
-```bash
-make hooks                                  # once: run `make lint` before every commit
-make test ROLE=base                         # lint, then one role's Molecule test
-make test                                   # lint, then every role
-```
-
-The Molecule tests use Docker if it is installed, otherwise Podman. On Fedora, enable
-Podman's Docker-compatible socket once with `systemctl --user enable --now podman.socket`
-(or force an engine with `make test CONTAINER_ENGINE=podman`). Locally the test
-container runs on your PC's CPU (x86_64), CI runs it on arm64.
-
-### CI
-
-CI (`.github/workflows/ci.yml`) runs on a PR only what its changes need:
-yamllint for YAML, ansible-lint for `ansible/`, shellcheck and the script tests for
-their scripts, Molecule for the roles the PR changes (and the scenarios that apply
-them), and the boot-script checks on Linux and macOS for `scripts/` and
-`bootstrap/`. A change to the workflow, `Makefile`, `mise.toml` or the
-requirements runs everything. Docs-only changes and draft PRs run nothing heavy;
-mark a PR ready for review to run it. Pushes to main, a weekly run (Mondays) and a
-manual run from the Actions tab test everything. The `CI ok` check sums it up: it
-passes when every job passed or was skipped, so it is the one to require.
-
-### Smoke tests on the real hardware
-
-What CI can't prove is checked by hand on the Pis:
-
-- [usbip server](docs/02-usbip-server.md#smoke-test-on-the-real-pi) (`pilab-living`, `pilab-rack`)
-- [OctoPrint](docs/octoprint.md#5-smoke-test-on-the-real-pi) (`octopi`)
-- [Tailscale](docs/tailscale.md#smoke-test-on-the-real-pis) (every Pi)
+`ansible/inventory/hosts.yml` lists only the Pis you actually have, so every target
+works with any subset of them. If a Pi isn't built yet, take it out of the inventory
+until `make new-pi` adds it back.
 
 ## Troubleshooting
 
-- First boot, SSH and host keys: [docs/01-base-image.md](docs/01-base-image.md#troubleshooting)
-- A Pi's name doesn't resolve: [how your computer finds the Pis](docs/01-base-image.md#how-your-computer-finds-the-pis),
-  and [from WSL](docs/windows.md#if-pilab-living--octopi-doesnt-resolve)
+### Finding the Pi on the network
+
+1. **Ethernet?** The Pi needs a cable to your router or a switch; Wi-Fi isn't set up.
+   The port's lights should come on.
+2. **Waited long enough?** Give the first boot 3 to 5 minutes.
+3. **Find its IP:** try `ping -c1 pilab-living` (or `pilab-living.lan` /
+   `.home`, if your router adds a suffix). Otherwise look in your router's device or
+   DHCP list for the hostname or a "Raspberry Pi" device, and try
+   `ssh admin@<that IP>`.
+4. **Found the IP but the name doesn't resolve?** Set `ansible_host: <IP>` for that
+   Pi in `ansible/inventory/hosts.yml`, and give it a DHCP reservation.
+5. **Not on the router at all?** Check the green LED flickers during boot (solid or
+   dark means a bad flash), and that the card's `bootfs` has `user-data` and
+   `network-config`. If they're missing, the card was pulled out before it finished
+   writing: run `make new-pi` again and eject properly.
+
+More detail: [how your computer finds the Pis](docs/01-base-image.md#how-your-computer-finds-the-pis),
+[the WSL checklist](docs/windows.md#if-the-pi-never-shows-up-on-the-network), and
+[names in WSL](docs/windows.md#if-pilab-living--octopi-doesnt-resolve).
+
+### Other problems
+
+- SSH asks for a password, host key warnings, checking cloud-init:
+  [docs/01-base-image.md](docs/01-base-image.md#troubleshooting)
 - The Pi doesn't boot from the SSD: [docs/04-ssd.md](docs/04-ssd.md#if-it-doesnt-boot-from-the-ssd)
 - OctoPrint: [docs/octoprint.md](docs/octoprint.md#troubleshooting)
 
-## Design choices
+## Going further
 
-- **Raspberry Pi OS Lite 64-bit (Trixie).** Standard kernel and packages, first-boot
-  setup through cloud-init, and what USBAnywhere's Pi fixes are tested on.
-- **One repo, one Ansible role per service.** New services are new roles; new Pis are
-  new inventory groups.
-- **Host vs. containers.** usbip runs on the host (it is kernel modules plus a daemon
-  that owns the USB hardware). Other services run as rootless Podman containers
-  managed by Quadlet, so each one is a normal systemd unit.
-- **SD card now, USB SSD later.** Moving to the SSD is "flash the SSD, re-run Ansible",
-  not cloning.
+- [Base image](docs/01-base-image.md): the flashing and first-boot steps by hand
+  (`scripts/configure-boot.sh`), what `make new-pi` does at each step, and scripting it
+- [Base setup and USB/IP server](docs/02-usbip-server.md): what the base and usbip
+  roles do, adding a dongle, renaming the old `pilab`
+- [Gaming PC setup](docs/03-client.md): auto-attach on Linux, USBAnywhere on Windows
+- [Health check and moving to the SSD](docs/04-ssd.md)
+- [OctoPrint](docs/octoprint.md): overrides, plugins, firmware updates, webcam focus, backups
+- [Running the setup from Windows (WSL)](docs/windows.md)
+- [Tailscale on every Pi](docs/tailscale.md): settings, auth keys for unattended runs
+- [Working on the repo](docs/development.md): repo layout, pinned tools, testing, CI,
+  hardware smoke tests, design choices
+
+Every Pi also gets the **dotfiles** role: zsh as the `admin` login shell, vim, and
+[philng/dotfiles](https://github.com/philng/dotfiles) cloned to `~/.dotfiles` with its
+`home/` files linked into `~` (existing files are kept as `<file>.pre-dotfiles`).
+Antidote and vim-plug are installed and the plugins fetched, so the first login is
+ready. Re-run `make apply` to pull dotfile changes.
