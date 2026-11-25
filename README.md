@@ -94,7 +94,8 @@ Connect, then disable key expiry for the Pi in the admin console
 
 - **`usbip`:** plug the dongles into the Pi's black USB 2 ports, then on the gaming
   PC run `sudo client/linux/install.sh` from this repo (on Fedora Atomic, run it again
-  after the reboot it asks for). Windows and details: [docs/03-client.md](docs/03-client.md).
+  after the reboot it asks for). On Windows, Vibepollo attaches them whenever a stream starts:
+  [docs/03-client.md](docs/03-client.md#windows-with-vibepollo-attach-while-streaming).
 - **`printer`:** plug the printer (and webcam) into the black USB 2 ports, open
   <http://octopi>, log in as `admin` with the password saved in
   `secrets/octoprint-admin-octopi`, and run the setup wizard. Plugins, OctoEverywhere
@@ -164,7 +165,7 @@ More detail: [how your computer finds the Pis](docs/01-base-image.md#how-your-co
   (`scripts/configure-boot.sh`), what `make new-pi` does at each step, and scripting it
 - [Base setup and USB/IP server](docs/02-usbip-server.md): what the base and usbip
   roles do, adding a dongle, renaming the old `pilab`
-- [Gaming PC setup](docs/03-client.md): auto-attach on Linux, USBAnywhere on Windows
+- [Gaming PC setup](docs/03-client.md): auto-attach on Linux, attach-while-streaming with Vibepollo on Windows
 - [Health check and moving to the SSD](docs/04-ssd.md)
 - [OctoPrint](docs/octoprint.md): overrides, plugins, firmware updates, webcam focus, backups
 - [Running the setup from Windows (WSL)](docs/windows.md)
