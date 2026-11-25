@@ -5,11 +5,14 @@ usbip_port: 3240
 # vid is required, pid optional (omit to match every product from that vendor).
 # Find IDs with `lsusb` on the Pi (ID vvvv:pppp).
 usbip_devices:
-  - name: Valve Steam Controller wireless receiver
+  # Original Steam Controller receiver (28de:1142) and the newer Steam
+  # Controller Puck (28de:1304).
+  - name: Valve Steam Controller receivers (all models)
     vid: "28de"
-    pid: "1142"
   - name: 8BitDo receivers (all models, in their native/Switch/D-input modes)
     vid: "2dc8"
+  - name: Flydigi receivers (all models, e.g. the CD2 for the Vader)
+    vid: "37d7"
   # 8BitDo and Flydigi receivers in XInput mode pretend to be this Xbox 360 receiver.
   - name: XInput-mode receivers (8BitDo, Flydigi Vader in X mode)
     vid: "045e"
