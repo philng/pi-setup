@@ -46,8 +46,8 @@ cd pi-setup
 
 In Raspberry Pi Imager: device **Raspberry Pi 4**, OS **Raspberry Pi OS (other) →
 Raspberry Pi OS Lite (64-bit)**, storage: your SD card or SSD. When it asks about
-customisation, choose **No**. Don't bother setting Wi-Fi there: this setup is
-**Ethernet only**, and the next step replaces Imager's network settings. Let it
+customisation, choose **No**. Ethernet is always set up; the next step asks
+whether to add Wi-Fi too ([details](docs/01-base-image.md#wi-fi-optional)). Let it
 finish writing and verifying.
 
 ### 4. Write the first-boot settings
@@ -128,8 +128,8 @@ until `make new-pi` adds it back.
 
 ### Finding the Pi on the network
 
-1. **Ethernet?** The Pi needs a cable to your router or a switch; Wi-Fi isn't set up.
-   The port's lights should come on.
+1. **Ethernet?** The Pi needs a cable to your router or a switch unless you added
+   Wi-Fi. The port's lights should come on.
 2. **Waited long enough?** Give the first boot 3 to 5 minutes.
 3. **Find its IP:** try `ping -c1 pilab-living` (or `pilab-living.lan` /
    `.home`, if your router adds a suffix). Otherwise look in your router's device or
