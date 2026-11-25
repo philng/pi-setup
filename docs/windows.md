@@ -58,18 +58,39 @@ and run `gh auth login` first.
 
 ## 4. SSH key (once)
 
-`make new-pi` puts your WSL key (`~/.ssh/id_ed25519.pub` in Ubuntu) on the Pi, and
-offers to create one if you have none, so usually there's nothing to do here.
+`make new-pi` and `scripts/configure-boot.sh` put your WSL key
+(`~/.ssh/id_ed25519.pub` in Ubuntu) on the Pi. If you don't have one there, they
+look for a key in Windows (`C:\Users\<you>\.ssh\*.pub`) and offer to copy that
+pair into WSL, or else offer to create a new key with `ssh-keygen`. So usually
+there's nothing to do here.
 
-To reuse a key you already have in Windows instead, copy the pair into WSL before
-running `make new-pi`, with the permissions SSH insists on. Replace `<you>` with your
-Windows username:
+The copy is needed because SSH in WSL refuses a private key that's readable by
+others, and every file under `/mnt/c` looks that way to WSL. To do it by hand
+instead, replace `<you>` with your Windows username:
 
 ```bash
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 cp /mnt/c/Users/<you>/.ssh/id_ed25519 /mnt/c/Users/<you>/.ssh/id_ed25519.pub ~/.ssh/
 chmod 600 ~/.ssh/id_ed25519
 chmod 644 ~/.ssh/id_ed25519.pub
+```
+
+## The card's drive letter
+
+WSL doesn't mount SD cards or other removable drives by itself: Windows shows the
+card as, say, `E:`, but `/mnt/e` in WSL stays an empty folder. `make new-pi` asks
+Windows which drive is `bootfs` and offers to mount it. Running the script
+yourself, give it the drive letter (or `/mnt/e`) and it offers the same:
+
+```bash
+scripts/configure-boot.sh E:
+```
+
+If it says the drive isn't a boot partition, check the letter in File Explorer
+(the small drive called `bootfs`). To mount it by hand:
+
+```bash
+sudo mkdir -p /mnt/e && sudo mount -t drvfs E: /mnt/e -o uid=$(id -u),gid=$(id -g)
 ```
 
 ## 5. Run Ansible

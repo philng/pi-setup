@@ -143,10 +143,9 @@ login_user() {
 
 valid_hostname() { [[ $1 =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; }
 
-is_wsl() { [[ -n ${NEW_PI_WSL:-} ]] || grep -qi microsoft /proc/version 2>/dev/null; }
-# Where WSL mounts Windows drives (tests point this elsewhere).
-WSL_MNT=${NEW_PI_WSL_MNT:-/mnt}
-is_bootfs() { [[ -d $1 && -f $1/config.txt && -f $1/cmdline.txt ]]; }
+# is_wsl, is_bootfs, wsl_mount, windows_bootfs_letter, windows_pubkeys, ...
+# shellcheck source=scripts/lib/wsl.sh
+source "$REPO_ROOT/scripts/lib/wsl.sh"
 
 # --- Waiting for the Pi ------------------------------------------------------
 wait_for_pi() {
@@ -291,6 +290,20 @@ if [[ -z $KEY ]]; then
   for k in "$HOME/.ssh/id_ed25519.pub" "$HOME"/.ssh/*.pub; do
     if [[ -f $k ]]; then DEF_KEY=$k; break; fi
   done
+  if [[ -z $DEF_KEY ]] && is_wsl; then
+    WIN_KEY=$(windows_pubkeys | head -n1)
+    if [[ -n $WIN_KEY ]]; then
+      say "No SSH key in WSL's ~/.ssh, but Windows has one: $WIN_KEY"
+      say "SSH in WSL can only use it from ~/.ssh in WSL, with tight permissions."
+      if [[ $YES -eq 0 ]] && confirm "Copy the key pair into ~/.ssh in WSL and use it?" Y; then
+        if DEF_KEY=$(import_windows_key "$WIN_KEY"); then
+          ok "copied to $DEF_KEY (and its private key, chmod 600)"
+        else
+          DEF_KEY=''
+        fi
+      fi
+    fi
+  fi
   if [[ -z $DEF_KEY ]]; then
     say "No SSH key found in ~/.ssh."
     if [[ $YES -eq 0 ]] && confirm "Create one now (ssh-keygen -t ed25519)?" Y; then
@@ -352,18 +365,6 @@ say "Flash it with Raspberry Pi Imager first: Raspberry Pi 4, Raspberry Pi OS Li
 say "and choose No when Imager offers customisation. Then unplug and re-plug it so this"
 say "computer sees its small 'bootfs' partition."
 
-wsl_mount() {  # wsl_mount E: -> prints /mnt/e after mounting it if needed
-  local letter dir
-  letter=$(printf '%s' "${1%%:*}" | tr '[:upper:]' '[:lower:]')
-  dir=$WSL_MNT/$letter
-  if ! is_bootfs "$dir"; then
-    say "Mounting drive $(printf '%s' "$letter" | tr '[:lower:]' '[:upper:]'): at $dir (needs sudo)..." >&2
-    sudo mkdir -p "$dir"
-    sudo mount -t drvfs "${letter}:" "$dir" -o "uid=$(id -u),gid=$(id -g)" >&2 || return 1
-  fi
-  printf '%s' "$dir"
-}
-
 find_bootfs() {  # print every mounted bootfs we can see, one per line
   local d
   for d in /Volumes/bootfs* "/run/media/${USER:-}/bootfs"* "/media/${USER:-}/bootfs"* /media/bootfs*; do
@@ -390,16 +391,10 @@ try_udisks_mount() {
 
 # WSL: ask Windows which drive letter has the "bootfs" label, and mount it.
 try_windows_drive() {
-  local ps letter
-  ps=$(command -v powershell.exe || true)
-  [[ -n $ps ]] || ps=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
-  [[ -x $ps ]] || return 1
-  letter=$("$ps" -NoProfile -NonInteractive -Command \
-    "Get-CimInstance Win32_LogicalDisk -Filter \"VolumeName='bootfs'\" | ForEach-Object { \$_.DeviceID }" \
-    2>/dev/null | tr -d '\r' | grep -E '^[A-Za-z]:$' | head -n1)
-  [[ -n $letter ]] || return 1
+  local letter
+  letter=$(windows_bootfs_letter) || return 1
   say "Windows has the bootfs partition as drive $letter." >&2
-  confirm "Mount it in WSL at $WSL_MNT/$(printf '%s' "${letter%:}" | tr '[:upper:]' '[:lower:]') (needs sudo)?" Y >&2 || return 1
+  confirm "Mount it in WSL at $(drive_dir "$letter") (needs sudo)?" Y >&2 || return 1
   wsl_mount "$letter"
 }
 

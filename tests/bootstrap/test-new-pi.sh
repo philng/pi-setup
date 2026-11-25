@@ -171,5 +171,62 @@ if NEW_PI_WSL=1 NEW_PI_WSL_MNT=$WORK/mnt run --yes --role printer --hostname oct
 else fail "WSL drive letter auto-detected"; cat "$WORK/out"; fi
 rm -f "$WORK/bin/powershell.exe" "$WORK/bin/sudo"
 
+# configure-boot.sh on its own, in WSL (fake /mnt, fake sudo/ssh-keygen).
+cb() { HOME=$WORK/home PATH="$WORK/bin:$PATH" NEW_PI_WSL=1 NEW_PI_WSL_MNT=$WORK/mnt \
+  "$WORK/repo/scripts/configure-boot.sh" "$@"; }
+fake_sudo() {  # "mount" makes $WORK/mnt/e look like the card's boot partition
+  cat > "$WORK/bin/sudo" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = mount ]; then touch "$WORK/mnt/e/config.txt" "$WORK/mnt/e/cmdline.txt"; exit 0; fi
+exec "\$@"
+EOF
+  chmod +x "$WORK/bin/sudo"
+}
+
+# 12. An empty /mnt/e (WSL didn't mount the card): offer to mount it, then write.
+setup
+rm -rf "${WORK:?}/mnt"; mkdir -p "$WORK/mnt/e"; fake_sudo
+if echo y | CONFIGURE_BOOT_INTERACTIVE=1 cb "$WORK/mnt/e" >"$WORK/out" 2>&1 \
+  && grep -q "doesn't mount SD cards" "$WORK/out" && grep -q '^#cloud-config' "$WORK/mnt/e/user-data"; then
+  pass "configure-boot mounts an empty /mnt/e"
+else fail "configure-boot mounts an empty /mnt/e"; cat "$WORK/out"; fi
+
+# 13. Same with a drive letter but no terminal: stop and print the mount command.
+rm -rf "${WORK:?}/mnt"; mkdir -p "$WORK/mnt/e"
+if ! cb E: </dev/null >"$WORK/out" 2>&1 \
+  && grep -q "sudo mount -t drvfs E: $WORK/mnt/e" "$WORK/out" && [[ ! -f $WORK/mnt/e/user-data ]]; then
+  pass "configure-boot explains the WSL mount"
+else fail "configure-boot explains the WSL mount"; cat "$WORK/out"; fi
+rm -f "$WORK/bin/sudo"
+
+# 14. No key in WSL, but one in Windows: copy the pair into ~/.ssh (chmod 600) and use it.
+setup
+rm -f "$WORK/home/.ssh/id_ed25519.pub"
+rm -rf "${WORK:?}/mnt"; mkdir -p "$WORK/mnt/c/Users/me/.ssh" "$WORK/mnt/c/Users/Public/.ssh"
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIwin win@example" > "$WORK/mnt/c/Users/me/.ssh/id_ed25519.pub"
+echo "PRIVATE" > "$WORK/mnt/c/Users/me/.ssh/id_ed25519"
+chmod 666 "$WORK/mnt/c/Users/me/.ssh/id_ed25519"
+if echo y | CONFIGURE_BOOT_INTERACTIVE=1 cb "$WORK/boot" >"$WORK/out" 2>&1 \
+  && grep -q "win@example" "$WORK/boot/user-data" \
+  && [[ -n $(find "$WORK/home/.ssh/id_ed25519" -perm 600) ]]; then
+  pass "configure-boot imports a Windows key"
+else fail "configure-boot imports a Windows key"; cat "$WORK/out"; fi
+
+# 15. No key anywhere: offer ssh-keygen; without a terminal, say how instead.
+setup
+rm -f "$WORK/home/.ssh/id_ed25519.pub"; rm -rf "${WORK:?}/mnt"
+cat > "$WORK/bin/ssh-keygen" <<'EOF'
+#!/usr/bin/env bash
+while [ $# -gt 0 ]; do [ "$1" = -f ] && f=$2; shift; done
+echo PRIVATE > "$f"; echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAInew new@example" > "$f.pub"
+EOF
+chmod +x "$WORK/bin/ssh-keygen"
+if ! cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 && grep -q "ssh-keygen -t ed25519" "$WORK/out" \
+  && echo y | CONFIGURE_BOOT_INTERACTIVE=1 cb "$WORK/boot" >"$WORK/out" 2>&1 \
+  && grep -q "new@example" "$WORK/boot/user-data"; then
+  pass "configure-boot offers ssh-keygen"
+else fail "configure-boot offers ssh-keygen"; cat "$WORK/out"; fi
+rm -f "$WORK/bin/ssh-keygen"
+
 [[ $fails -eq 0 ]] || { echo "$fails test(s) failed"; exit 1; }
 echo "all new-pi tests passed"
