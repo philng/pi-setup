@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: virtualhere
+  author: philng
+  description: VirtualHere USB Server, an optional alternative to usbip (expects the base role's firewall)
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

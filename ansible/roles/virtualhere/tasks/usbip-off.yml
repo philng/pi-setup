@@ -1,0 +1,37 @@
+---
+# Undo the usbip role on a Pi switched to VirtualHere. Does nothing on a Pi
+# that never ran usbip.
+- name: Look for usbip's unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/usbipd.service
+  register: virtualhere_usbipd_unit
+
+- name: Stop and disable usbipd
+  ansible.builtin.systemd_service:
+    name: usbipd
+    state: stopped
+    enabled: false
+  when: virtualhere_usbipd_unit.stat.exists
+
+- name: Remove usbip's auto-export rules, boot module and firewall opening
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/udev/rules.d/90-usbip-export.rules
+    - /etc/modules-load.d/usbip.conf
+    - /etc/nftables.d/30-usbip.nft
+  register: virtualhere_usbip_files
+  notify: Reload nftables
+
+# Hand exported dongles back to their normal drivers, so VirtualHere can share them.
+- name: Release devices still exported over usbip
+  ansible.builtin.shell: |
+    set -e
+    udevadm control --reload-rules
+    for d in /sys/bus/usb/drivers/usbip-host/[0-9]*-*; do
+      [ -e "$d" ] || continue
+      usbip unbind --busid="${d##*/}"
+    done
+  changed_when: true
+  when: virtualhere_usbip_files is changed and virtualhere_start | bool

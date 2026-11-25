@@ -1,0 +1,10 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    usb_server: virtualhere
+    virtualhere_license_file: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/virtualhere-license"
+  roles:
+    - base
+    - virtualhere

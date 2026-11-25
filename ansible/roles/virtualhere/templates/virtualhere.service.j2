@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# VirtualHere USB Server (VirtualHere's own unit, plus the config merge and restarts).
+[Unit]
+Description=VirtualHere USB Server
+After=network-online.target
+Wants=network-online.target
+Conflicts=usbipd.service
+
+[Service]
+Type=forking
+ExecStartPre=/usr/local/libexec/virtualhere-config {{ virtualhere_config_dir }}/managed.ini {{ virtualhere_config_dir }}/config.ini
+ExecStart={{ virtualhere_binary }} -b -c {{ virtualhere_config_dir }}/config.ini
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

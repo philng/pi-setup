@@ -1,0 +1,7 @@
+---
+# What shares the dongles on the USB Pis: usbip (free, open source) or
+# virtualhere (VirtualHere USB Server: free for one device at a time, a $49
+# licence per Pi for more). Switch one Pi in inventory/host_vars/<host>.yml,
+# e.g. `usb_server: virtualhere`, then make apply LIMIT=<host>. The role that
+# runs turns the other one off. See docs/virtualhere.md.
+usb_server: usbip

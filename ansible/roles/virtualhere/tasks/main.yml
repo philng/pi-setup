@@ -1,0 +1,83 @@
+---
+- name: Check the device list
+  ansible.builtin.assert:
+    that:
+      - virtualhere_devices | length > 0
+      - virtualhere_devices | rejectattr('vid', 'defined') | list | length == 0
+    fail_msg: >-
+      virtualhere_devices needs at least one entry, each with a vid. An empty
+      list would share every USB device on the Pi, the boot SSD included.
+
+# usbip and VirtualHere would fight over the same dongles, so switching a Pi to
+# VirtualHere turns usbip off first (its package stays installed).
+- name: Turn off usbip
+  ansible.builtin.import_tasks: usbip-off.yml
+
+- name: Download the VirtualHere server
+  ansible.builtin.get_url:
+    url: "{{ virtualhere_binary_url }}"
+    dest: "{{ virtualhere_binary }}"
+    checksum: "{{ virtualhere_binary_checksum | default(omit, true) }}"
+    force: "{{ virtualhere_update | bool }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart VirtualHere
+
+- name: Create the config folder
+  ansible.builtin.file:
+    path: "{{ virtualhere_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install the config merge script
+  ansible.builtin.copy:
+    src: virtualhere-config
+    dest: /usr/local/libexec/virtualhere-config
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the settings Ansible manages
+  ansible.builtin.template:
+    src: managed.ini.j2
+    dest: "{{ virtualhere_config_dir }}/managed.ini"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true  # may hold the licence key
+  notify: Restart VirtualHere
+
+- name: Install the systemd unit
+  ansible.builtin.template:
+    src: virtualhere.service.j2
+    dest: /etc/systemd/system/virtualhere.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: [Reload systemd, Restart VirtualHere]
+
+- name: Open the VirtualHere port to the LAN
+  ansible.builtin.template:
+    src: 35-virtualhere.nft.j2
+    dest: /etc/nftables.d/35-virtualhere.nft
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nftables
+
+- name: Flush handlers so the unit exists before enabling
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable VirtualHere
+  ansible.builtin.systemd_service:
+    name: virtualhere
+    enabled: true
+
+- name: Start VirtualHere
+  ansible.builtin.systemd_service:
+    name: virtualhere
+    state: started
+  when: virtualhere_start | bool

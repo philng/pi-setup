@@ -40,14 +40,24 @@
     - network
     - tailscale
 
+# usbip or VirtualHere, per host (usb_server in inventory/group_vars/usbip.yml).
+# Each role turns the other off, so they never share the dongles.
 - name: USB-over-IP server
   hosts: usbip
   become: true
   module_defaults:
     ansible.builtin.apt:
       lock_timeout: 600
+  pre_tasks:
+    - name: Check usb_server
+      ansible.builtin.assert:
+        that: usb_server in ['usbip', 'virtualhere']
+        fail_msg: "usb_server must be usbip or virtualhere, not {{ usb_server }}"
   roles:
-    - usbip
+    - role: usbip
+      when: usb_server == 'usbip'
+    - role: virtualhere
+      when: usb_server == 'virtualhere'
 
 - name: 3D printer server
   hosts: printers

@@ -60,6 +60,8 @@ Handy knobs (put them in `ansible/inventory/group_vars/` or `host_vars/`):
 
 ## What the usbip role does
 
+(To try VirtualHere on a Pi instead, see [virtualhere.md](virtualhere.md).)
+
 - Installs `usbip`, loads the `usbip_host` kernel module at boot, and runs
   `usbipd` on TCP 3240 (LAN only).
 - Exports your dongles **automatically whenever they're plugged in**, matched

@@ -1,0 +1,21 @@
+---
+# Undo the virtualhere role on a Pi switched back to usbip, so the two never
+# fight over the same dongles. Does nothing on a Pi that never ran VirtualHere.
+# Its binary and config.ini stay, so switching back keeps its settings.
+- name: Look for VirtualHere's unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/virtualhere.service
+  register: usbip_virtualhere_unit
+
+- name: Stop and disable VirtualHere
+  ansible.builtin.systemd_service:
+    name: virtualhere
+    state: stopped
+    enabled: false
+  when: usbip_virtualhere_unit.stat.exists
+
+- name: Close VirtualHere's firewall opening
+  ansible.builtin.file:
+    path: /etc/nftables.d/35-virtualhere.nft
+    state: absent
+  notify: Reload nftables

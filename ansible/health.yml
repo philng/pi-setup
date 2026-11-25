@@ -30,6 +30,9 @@
           echo "usbipd=$(systemctl is-active usbipd)"
           echo "exported=$(ls /sys/bus/usb/drivers/usbip-host 2>/dev/null | grep -E '^[0-9]+-' | paste -sd, -)"
         fi
+        if systemctl is-enabled virtualhere >/dev/null 2>&1; then
+          echo "virtualhere=$(systemctl is-active virtualhere)"
+        fi
       args:
         executable: /bin/bash
       register: health_raw
@@ -48,7 +51,10 @@
           {{
             ([('failed units: ' ~ health.failed_units)] if health.failed_units else [])
             + (['firewall table inet pilab is not loaded'] if health.firewall != 'loaded' else [])
-            + (['usbipd is ' ~ health.usbipd] if health.usbipd is defined and health.usbipd != 'active' else [])
+            + (['usbipd is ' ~ health.usbipd]
+               if health.usbipd is defined and health.usbipd != 'active' and health.virtualhere is not defined else [])
+            + (['VirtualHere is ' ~ health.virtualhere]
+               if health.virtualhere is defined and health.virtualhere != 'active' else [])
             + (['under-voltage right now: use the official 3A supply or a powered SSD enclosure']
                if (thr | int) % 2 == 1 else [])
             + (['throttling right now (hot or under-volted)']
@@ -78,6 +84,7 @@
           - "Last automatic upgrade: {{ health.last_upgrade | default('never', true) }}"
           - "Tailscale: {{ health.tailscale | default('not installed') }}"
           - "usbipd: {{ health.usbipd | default('n/a') }}, exported: {{ health.exported | default('none', true) }}"
+          - "VirtualHere: {{ health.virtualhere | default('n/a') }}"
           - "Warnings: {{ health_warnings | join('; ') or 'none' }}"
           - "Problems: {{ health_problems | join('; ') or 'none' }}"
 

@@ -118,7 +118,7 @@ lint-ansible: deps-dev
 	cd $(ANSIBLE_DIR) && ansible-lint
 
 lint-shell: deps-dev
-	shellcheck -x scripts/*.sh scripts/lib/*.sh client/linux/*.sh client/linux/usbip-autoattach ansible/roles/octoprint/files/octoprint-devices tests/client/*.sh tests/bootstrap/*.sh tests/octoprint/*.sh .github/scripts/*.sh .githooks/pre-commit
+	shellcheck -x scripts/*.sh scripts/lib/*.sh client/linux/*.sh client/linux/usbip-autoattach ansible/roles/octoprint/files/octoprint-devices ansible/roles/virtualhere/files/virtualhere-config tests/client/*.sh tests/bootstrap/*.sh tests/octoprint/*.sh .github/scripts/*.sh .githooks/pre-commit
 
 hooks: ## Lint before every commit (git pre-commit hook in .githooks/)
 	git config core.hooksPath .githooks

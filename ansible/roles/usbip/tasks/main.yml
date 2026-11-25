@@ -1,4 +1,7 @@
 ---
+- name: Turn off VirtualHere
+  ansible.builtin.import_tasks: virtualhere-off.yml
+
 - name: Install USB/IP tools
   ansible.builtin.apt:
     name: [usbip, hwdata, usbutils]
