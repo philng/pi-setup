@@ -106,6 +106,26 @@ make apply LIMIT=octopi     # or just one
 
 The first connection to each Pi asks you to confirm its host key; type `yes`.
 
+## If the Pi never shows up on the network
+
+Work through these in order:
+
+1. **Ethernet.** This setup is Ethernet only: it doesn't configure Wi-Fi, and it
+   replaces any Wi-Fi you set in Raspberry Pi Imager (`configure-boot.sh` warns
+   when it does). Plug the Pi into your router or a switch. The port's lights
+   should come on.
+2. **Wait.** The first boot resizes the disk, runs cloud-init and reboots once.
+   Give it 3 to 5 minutes before deciding it's stuck.
+3. **The router's device list.** Look for `pilab-living` (or a Raspberry Pi
+   device). If it has an IP, try `ssh admin@<that IP>` from Ubuntu.
+4. **The green LED.** It should flicker during boot. Solid or dark usually means
+   the card didn't flash properly: flash it again.
+5. **The card's files.** Put the card back in the PC and open `bootfs` in File
+   Explorer. `user-data` should have your hostname and SSH key, and
+   `network-config` should mention `eth0`. If they're missing, the card was
+   pulled out before Windows finished writing: run `configure-boot.sh` again,
+   and eject the drive in Windows before removing it.
+
 ## If `pilab-living` / `octopi` doesn't resolve
 
 The repo uses plain hostnames, which WSL looks up through Windows and your router,

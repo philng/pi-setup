@@ -58,7 +58,7 @@ fi
 # --- The boot partition ------------------------------------------------------
 # WSL: E: or /mnt/e. WSL doesn't mount removable drives on its own, so for an
 # SD card /mnt/e is usually just an empty folder: offer to mount it.
-LETTER=''
+LETTER='' MOUNTED=0
 if [[ $BOOT =~ ^[A-Za-z]:[\\/]?$ ]]; then
   is_wsl || die "drive letters like $BOOT only work in WSL (on Windows, run this inside WSL: docs/windows.md)"
   LETTER=$(printf '%s' "${BOOT:0:1}" | tr '[:lower:]' '[:upper:]'):
@@ -81,6 +81,7 @@ if [[ -n $LETTER ]] && ! is_bootfs "$BOOT"; then
     echo "$BOOT is empty: WSL doesn't mount SD cards and other removable drives by itself." >&2
     if confirm "Mount drive $LETTER at $BOOT now (sudo mount -t drvfs)?"; then
       BOOT=$(wsl_mount "$LETTER") || die "couldn't mount $LETTER at $BOOT. Check the drive letter in File Explorer"
+      MOUNTED=1
     else
       die "mount the card in WSL first, then run this again:
   sudo mkdir -p $BOOT && sudo mount -t drvfs $LETTER $BOOT -o uid=\$(id -u),gid=\$(id -g)
@@ -149,7 +150,10 @@ if [[ ! -r $SSH_PUBKEY_FILE ]]; then
 $hint"
   fi
 fi
-SSH_PUBKEY=$(head -n1 "$SSH_PUBKEY_FILE")
+# tr: a key saved by a Windows editor can end in CRLF.
+SSH_PUBKEY=$(head -n1 "$SSH_PUBKEY_FILE" | tr -d '\r')
+[[ $SSH_PUBKEY == ssh-* || $SSH_PUBKEY == ecdsa-* || $SSH_PUBKEY == sk-* ]] \
+  || die "$SSH_PUBKEY_FILE doesn't look like an SSH public key"
 
 # Keep whatever Imager wrote, in case you want to compare.
 for f in user-data network-config; do
@@ -157,6 +161,12 @@ for f in user-data network-config; do
     cp "$BOOT/$f" "$BOOT/$f.orig"
   fi
 done
+# This setup is Ethernet only. If Wi-Fi was set in Imager, say we're replacing it
+# rather than leave a Pi that never joins the network.
+if grep -qs '^[[:space:]]*wifis:' "$BOOT/network-config.orig"; then
+  echo "warning: Raspberry Pi Imager set up Wi-Fi on this card, but this repo's network-config" >&2
+  echo "         is Ethernet only and replaces it. The Pi must be plugged into Ethernet." >&2
+fi
 
 esc() { printf '%s' "$1" | sed 's/[&|\\]/\\&/g'; }
 sed -e "s|@PI_HOSTNAME@|$(esc "$PI_HOSTNAME")|g" \
@@ -174,4 +184,13 @@ sync
 
 echo "Wrote user-data and network-config to $BOOT"
 echo "  hostname=$PI_HOSTNAME user=$PI_USER key=$SSH_PUBKEY_FILE"
-echo "Eject the card/SSD, put it in the Pi, connect Ethernet and power on."
+# WSL: let go of the drive we mounted, or Windows says it's in use and won't eject
+# it (and pulling it out anyway can lose the files just written).
+if [[ $MOUNTED -eq 1 ]]; then
+  if sudo umount "$BOOT"; then
+    echo "Unmounted $BOOT from WSL. Now eject $LETTER in Windows (File Explorer, right-click, Eject)."
+  else
+    echo "warning: couldn't unmount $BOOT; run: sudo umount $BOOT, then eject $LETTER in Windows" >&2
+  fi
+fi
+echo "Eject the card/SSD, put it in the Pi, connect Ethernet (Wi-Fi isn't set up) and power on."

@@ -462,7 +462,8 @@ if [[ $YES -eq 0 ]] && confirm "Eject the card now?" Y; then
   if [[ $(uname) == Darwin ]]; then
     diskutil eject "$BOOT" && ejected=1
   elif is_wsl; then
-    if [[ $BOOT == /mnt/? ]] && sudo umount "$BOOT"; then
+    # configure-boot.sh already unmounts a drive it mounted itself.
+    if [[ $BOOT == /mnt/? ]] && { ! mountpoint -q "$BOOT" || sudo umount "$BOOT"; }; then
       say "Unmounted from WSL. Now eject it in Windows too (File Explorer, right-click, Eject)."
     fi
   elif command -v udisksctl >/dev/null; then

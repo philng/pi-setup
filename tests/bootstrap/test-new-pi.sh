@@ -162,6 +162,7 @@ printf '#!/usr/bin/env bash\nprintf "E:\\r\\n"\n' > "$WORK/bin/powershell.exe"
 cat > "$WORK/bin/sudo" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = mount ]; then touch "$WORK/mnt/e/config.txt" "$WORK/mnt/e/cmdline.txt"; exit 0; fi
+if [ "\$1" = umount ]; then echo "\$2" >> "$WORK/umounted"; exit 0; fi
 exec "\$@"
 EOF
 chmod +x "$WORK/bin/powershell.exe" "$WORK/bin/sudo"
@@ -178,6 +179,7 @@ fake_sudo() {  # "mount" makes $WORK/mnt/e look like the card's boot partition
   cat > "$WORK/bin/sudo" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = mount ]; then touch "$WORK/mnt/e/config.txt" "$WORK/mnt/e/cmdline.txt"; exit 0; fi
+if [ "\$1" = umount ]; then echo "\$2" >> "$WORK/umounted"; exit 0; fi
 exec "\$@"
 EOF
   chmod +x "$WORK/bin/sudo"
@@ -186,10 +188,12 @@ EOF
 # 12. An empty /mnt/e (WSL didn't mount the card): offer to mount it, then write.
 setup
 rm -rf "${WORK:?}/mnt"; mkdir -p "$WORK/mnt/e"; fake_sudo
+rm -f "$WORK/umounted"
 if echo y | CONFIGURE_BOOT_INTERACTIVE=1 cb "$WORK/mnt/e" >"$WORK/out" 2>&1 \
-  && grep -q "doesn't mount SD cards" "$WORK/out" && grep -q '^#cloud-config' "$WORK/mnt/e/user-data"; then
-  pass "configure-boot mounts an empty /mnt/e"
-else fail "configure-boot mounts an empty /mnt/e"; cat "$WORK/out"; fi
+  && grep -q "doesn't mount SD cards" "$WORK/out" && grep -q '^#cloud-config' "$WORK/mnt/e/user-data" \
+  && grep -qx "$WORK/mnt/e" "$WORK/umounted" && grep -q "eject E: in Windows" "$WORK/out"; then
+  pass "configure-boot mounts an empty /mnt/e, then unmounts it"
+else fail "configure-boot mounts an empty /mnt/e, then unmounts it"; cat "$WORK/out"; fi
 
 # 13. Same with a drive letter but no terminal: stop and print the mount command.
 rm -rf "${WORK:?}/mnt"; mkdir -p "$WORK/mnt/e"
@@ -227,6 +231,22 @@ if ! cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 && grep -q "ssh-keygen -t ed25
   pass "configure-boot offers ssh-keygen"
 else fail "configure-boot offers ssh-keygen"; cat "$WORK/out"; fi
 rm -f "$WORK/bin/ssh-keygen"
+
+# 16. A key file with Windows (CRLF) line endings: no stray \r in user-data.
+setup
+printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIcrlf crlf@example\r\n' > "$WORK/home/.ssh/id_ed25519.pub"
+if cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && grep -q "crlf@example$" "$WORK/boot/user-data" && ! grep -q $'\r' "$WORK/boot/user-data"; then
+  pass "configure-boot strips CRLF from the key"
+else fail "configure-boot strips CRLF from the key"; cat "$WORK/out"; fi
+
+# 17. Imager set up Wi-Fi: warn that this Ethernet-only config replaces it.
+setup
+printf 'network:\n  version: 2\n  wifis:\n    wlan0:\n      dhcp4: true\n' > "$WORK/boot/network-config"
+if cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && grep -q "Imager set up Wi-Fi" "$WORK/out" && grep -q "wifis:" "$WORK/boot/network-config.orig"; then
+  pass "configure-boot warns when it replaces Imager's Wi-Fi"
+else fail "configure-boot warns when it replaces Imager's Wi-Fi"; cat "$WORK/out"; fi
 
 [[ $fails -eq 0 ]] || { echo "$fails test(s) failed"; exit 1; }
 echo "all new-pi tests passed"
