@@ -240,13 +240,119 @@ if cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
   pass "configure-boot strips CRLF from the key"
 else fail "configure-boot strips CRLF from the key"; cat "$WORK/out"; fi
 
-# 17. Imager set up Wi-Fi: warn that this Ethernet-only config replaces it.
+# --- Wi-Fi (optional) ---------------------------------------------------------
+# A made-up password, so we can check it never shows up in the output.
+PSK='s3cr3t "pass" \word'
+# net FIELD: one fact about the card's network-config and user-data, per the real YAML.
+net() {
+  python3 - "$WORK/boot" "$1" <<'PY'
+import sys, yaml
+boot, what = sys.argv[1], sys.argv[2]
+n = yaml.safe_load(open(boot + "/network-config"))["network"]
+u = yaml.safe_load(open(boot + "/user-data"))
+w = (n.get("wifis") or {}).get("wlan0")
+if what == "wifi":
+    if not w:
+        print("none")
+    else:
+        (ssid, ap), = w["access-points"].items()
+        print(ssid, "|", ap["password"], "|", w.get("regulatory-domain"))
+elif what == "metrics":
+    print(n["ethernets"]["eth0"]["dhcp4-overrides"]["route-metric"],
+          w["dhcp4-overrides"]["route-metric"] if w else "-")
+elif what == "country":
+    print(" ".join(c[3] for c in u.get("runcmd", []) if c[:3] == ["raspi-config", "nonint", "do_wifi_country"]) or "none")
+PY
+}
+IMAGER_NC='network:
+  version: 2
+  wifis:
+    renderer: NetworkManager
+    wlan0:
+      dhcp4: true
+      regulatory-domain: "DE"
+      access-points:
+        "Imager Net":
+          password: "imagerpass"
+      optional: true
+'
+
+# 17. No Wi-Fi asked for and no terminal: Ethernet only, as before.
 setup
-printf 'network:\n  version: 2\n  wifis:\n    wlan0:\n      dhcp4: true\n' > "$WORK/boot/network-config"
 if cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
-  && grep -q "Imager set up Wi-Fi" "$WORK/out" && grep -q "wifis:" "$WORK/boot/network-config.orig"; then
-  pass "configure-boot warns when it replaces Imager's Wi-Fi"
-else fail "configure-boot warns when it replaces Imager's Wi-Fi"; cat "$WORK/out"; fi
+  && [[ $(net wifi) == none && $(net country) == none ]] && ! grep -q "Wi-Fi (" "$WORK/out"; then
+  pass "configure-boot: Ethernet only by default"
+else fail "configure-boot: Ethernet only by default"; cat "$WORK/out"; fi
+
+# 18. Wi-Fi from the environment: valid YAML even with quotes and backslashes,
+#     Ethernet's route metric lower so it's preferred, country set, password
+#     never printed.
+setup
+if WIFI_SSID='Cafe "5G" \x' WIFI_PASSWORD=$PSK WIFI_COUNTRY=gb cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && [[ $(net wifi) == "Cafe \"5G\" \\x | $PSK | GB" ]] \
+  && [[ $(net metrics) == "100 600" && $(net country) == GB ]] \
+  && ! grep -qF "s3cr3t" "$WORK/out" && grep -q "Wi-Fi (network Cafe" "$WORK/out"; then
+  pass "configure-boot: Wi-Fi from the environment"
+else fail "configure-boot: Wi-Fi from the environment"; cat "$WORK/out"; net wifi; fi
+
+# 19. Bad Wi-Fi settings are refused, without echoing the password. A 64-digit
+#     hex key is fine.
+setup
+HEXKEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+if ! WIFI_SSID=Home WIFI_PASSWORD=short7c cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && grep -q "8 to 63" "$WORK/out" && ! grep -q short7c "$WORK/out" \
+  && ! WIFI_SSID=Home cb "$WORK/boot" </dev/null >/dev/null 2>&1 \
+  && ! WIFI_SSID=Home WIFI_PASSWORD=$PSK WIFI_COUNTRY=USA cb "$WORK/boot" </dev/null >/dev/null 2>&1 \
+  && WIFI_SSID=Home WIFI_PASSWORD=$HEXKEY cb "$WORK/boot" </dev/null >/dev/null 2>&1 \
+  && [[ $(net wifi) == "Home | $HEXKEY | US" ]]; then
+  pass "configure-boot: bad Wi-Fi settings refused"
+else fail "configure-boot: bad Wi-Fi settings refused"; cat "$WORK/out"; fi
+
+# 20. Asked from a terminal: the password isn't echoed, and saving writes
+#     secrets/wifi.yml (mode 600) that the next run reads back the same.
+setup
+if printf 'y\nHome Net\n%s\nnz\ny\n' "$PSK" | CONFIGURE_BOOT_INTERACTIVE=1 cb "$WORK/boot" >"$WORK/out" 2>&1 \
+  && [[ $(net wifi) == "Home Net | $PSK | NZ" ]] && ! grep -qF "s3cr3t" "$WORK/out" \
+  && [[ -n $(find "$WORK/repo/secrets/wifi.yml" -perm 600) ]] \
+  && cp "$WORK/boot/network-config" "$WORK/nc.first" \
+  && rm -f "$WORK/boot/network-config" "$WORK/boot/user-data" \
+  && cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && grep -q "Using Wi-Fi from" "$WORK/out" && cmp -s "$WORK/nc.first" "$WORK/boot/network-config" \
+  && WIFI=off cb "$WORK/boot" </dev/null >/dev/null 2>&1 && [[ $(net wifi) == none ]]; then
+  pass "configure-boot: asks for Wi-Fi, saves and reuses secrets/wifi.yml"
+else fail "configure-boot: asks for Wi-Fi, saves and reuses secrets/wifi.yml"; cat "$WORK/out"; fi
+
+# 21. Saying no keeps it Ethernet only, and nothing is saved.
+setup
+if printf 'n\n' | CONFIGURE_BOOT_INTERACTIVE=1 cb "$WORK/boot" >"$WORK/out" 2>&1 \
+  && [[ $(net wifi) == none && ! -e $WORK/repo/secrets/wifi.yml ]]; then
+  pass "configure-boot: no to Wi-Fi"
+else fail "configure-boot: no to Wi-Fi"; cat "$WORK/out"; fi
+
+# 22. Imager set up Wi-Fi: it's kept now (with its country), not wiped; giving
+#     another network replaces it; WIFI=off drops it with a warning.
+setup
+printf '%s' "$IMAGER_NC" > "$WORK/boot/network-config"
+if cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && grep -q "Imager set up Wi-Fi" "$WORK/out" && grep -q "wifis:" "$WORK/boot/network-config.orig" \
+  && [[ $(net wifi) == "Imager Net | imagerpass | DE" && $(net country) == DE ]] \
+  && WIFI_SSID=Other WIFI_PASSWORD=$PSK cb "$WORK/boot" </dev/null >/dev/null 2>&1 \
+  && [[ $(net wifi) == "Other | $PSK | US" ]] \
+  && WIFI=off cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && [[ $(net wifi) == none ]] && grep -q "replaced" "$WORK/out"; then
+  pass "configure-boot keeps Imager's Wi-Fi"
+else fail "configure-boot keeps Imager's Wi-Fi"; cat "$WORK/out"; fi
+
+# 23. The wizard: --yes never asks about Wi-Fi (even with a terminal), and
+#     --no-wifi drops Imager's.
+setup
+printf '%s' "$IMAGER_NC" > "$WORK/boot/network-config"
+if CONFIGURE_BOOT_INTERACTIVE=1 run --yes --role printer --hostname octopi --boot "$WORK/boot" </dev/null >"$WORK/out" 2>&1 \
+  && ! grep -q "Replace it with" "$WORK/out" && [[ $(net wifi) == "Imager Net | imagerpass | DE" ]] \
+  && run --yes --no-wifi --role printer --hostname octopi --boot "$WORK/boot" >"$WORK/out" 2>&1 \
+  && [[ $(net wifi) == none ]] && grep -q "wifi      none (--no-wifi)" "$WORK/out"; then
+  pass "new-pi Wi-Fi options"
+else fail "new-pi Wi-Fi options"; cat "$WORK/out"; fi
 
 [[ $fails -eq 0 ]] || { echo "$fails test(s) failed"; exit 1; }
 echo "all new-pi tests passed"

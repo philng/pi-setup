@@ -48,14 +48,21 @@ card, then waits for SSH. Asks for anything you don't pass.
   --key FILE             SSH public key to log in with (default ~/.ssh/id_ed25519.pub)
   --boot PATH            the mounted "bootfs" partition (in WSL also a drive letter, E:)
   --no-boot              only update the inventory, don't write a card
+  --no-wifi              Ethernet only: don't ask about Wi-Fi, and drop any
+                         Wi-Fi Raspberry Pi Imager set up on the card
   --no-wait              don't wait for the Pi to boot afterwards
   --wait                 only wait for an already-flashed Pi (needs --hostname)
   -y, --yes              never ask: use defaults, fail if something is missing
   -h, --help             this help
+
+Wi-Fi is optional (Ethernet is always set up, and preferred when plugged in).
+Without --yes, writing the card asks whether to add it. With --yes it's added
+only from secrets/wifi.yml (git-ignored) or WIFI_SSID/WIFI_PASSWORD/WIFI_COUNTRY
+in the environment. See docs/01-base-image.md.
 EOF
 }
 
-ROLE='' HOST='' KEY='' BOOT='' NO_BOOT=0 NO_WAIT=0 WAIT_ONLY=0 YES=0
+ROLE='' HOST='' KEY='' BOOT='' NO_BOOT=0 NO_WAIT=0 WAIT_ONLY=0 YES=0 NO_WIFI=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --role) ROLE=${2:-}; shift 2 ;;
@@ -64,6 +71,7 @@ while [[ $# -gt 0 ]]; do
     --boot) BOOT=${2:-}; shift 2 ;;
     --no-boot) NO_BOOT=1; shift ;;
     --no-wait) NO_WAIT=1; shift ;;
+    --no-wifi) NO_WIFI=1; shift ;;
     --wait) WAIT_ONLY=1; shift ;;
     -y | --yes) YES=1; shift ;;
     -h | --help) usage; exit 0 ;;
@@ -196,7 +204,7 @@ wait_for_pi() {
     if (( now - start >= WAIT_TIMEOUT )); then
       echo
       say "${R}No SSH after $((WAIT_TIMEOUT / 60)) minutes.${N} Last error: $err"
-      say "Check the Pi has power and Ethernet (green LED flickers on boot)."
+      say "Check the Pi has power and Ethernet, or the Wi-Fi details are right (green LED flickers on boot)."
       if [[ ! $addr =~ ^[0-9.]+$ && ! $addr == *:* ]]; then
         say "If $addr never resolves, your router isn't giving out its DHCP clients' names."
         say "Find the Pi's IP on your router's device list, give it a DHCP reservation, set"
@@ -451,9 +459,27 @@ say "  hostname  $HOST, reached as $ADDR"
 say "  login     ssh $USER_NAME@$ADDR"
 say "  key       $KEY"
 say "  card      $BOOT"
+if [[ $NO_WIFI -eq 1 ]]; then
+  WIFI_SUMMARY="none (--no-wifi): Ethernet only"
+elif [[ -n ${WIFI_SSID:-} ]]; then
+  WIFI_SUMMARY="$WIFI_SSID (from WIFI_SSID), Ethernet preferred"
+elif [[ -f $REPO_ROOT/secrets/wifi.yml ]]; then
+  WIFI_SUMMARY="from secrets/wifi.yml, Ethernet preferred"
+elif [[ $YES -eq 1 ]]; then
+  WIFI_SUMMARY="none (Ethernet only, unless Imager set it up)"
+else
+  WIFI_SUMMARY="optional: asked next"
+fi
+say "  wifi      $WIFI_SUMMARY"
 confirm "Write the first-boot settings to the card?" Y || die "stopped, nothing written to the card"
 
-PI_HOSTNAME=$HOST SSH_PUBKEY_FILE=$KEY "$REPO_ROOT/scripts/configure-boot.sh" "$BOOT"
+# configure-boot.sh asks about Wi-Fi itself (and handles the password), except
+# with --yes; --no-wifi turns it off.
+WIFI_ENV=()
+[[ $YES -eq 0 ]] || WIFI_ENV+=(WIFI_ASK=0)
+[[ $NO_WIFI -eq 0 ]] || WIFI_ENV+=(WIFI=off)
+env ${WIFI_ENV[@]+"${WIFI_ENV[@]}"} PI_HOSTNAME="$HOST" SSH_PUBKEY_FILE="$KEY" \
+  "$REPO_ROOT/scripts/configure-boot.sh" "$BOOT"
 
 # --- 6. Eject and boot ------------------------------------------------------
 step "5. Eject and power on"
@@ -475,7 +501,7 @@ if [[ $YES -eq 0 ]] && confirm "Eject the card now?" Y; then
   fi
   if [[ $ejected -eq 1 ]]; then ok "ejected"; fi
 fi
-say "Put it in the Pi, plug in Ethernet, then power."
+say "Put it in the Pi, plug in Ethernet (or rely on Wi-Fi if you set it up), then power."
 
 if [[ $NO_WAIT -eq 1 || $YES -eq 1 ]]; then
   say

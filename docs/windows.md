@@ -110,10 +110,11 @@ The first connection to each Pi asks you to confirm its host key; type `yes`.
 
 Work through these in order:
 
-1. **Ethernet.** This setup is Ethernet only: it doesn't configure Wi-Fi, and it
-   replaces any Wi-Fi you set in Raspberry Pi Imager (`configure-boot.sh` warns
-   when it does). Plug the Pi into your router or a switch. The port's lights
-   should come on.
+1. **Ethernet.** Plug the Pi into your router or a switch; the port's lights
+   should come on. Wi-Fi is only set up if you asked for it (see
+   [Wi-Fi](01-base-image.md#wi-fi-optional)); `configure-boot.sh` prints
+   `network: Ethernet, and Wi-Fi (...)` when it is. A mistyped Wi-Fi password
+   or country is the usual reason a Wi-Fi-only Pi never appears.
 2. **Wait.** The first boot resizes the disk, runs cloud-init and reboots once.
    Give it 3 to 5 minutes before deciding it's stuck.
 3. **The router's device list.** Look for `pilab-living` (or a Raspberry Pi
