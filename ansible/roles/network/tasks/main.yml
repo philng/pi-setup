@@ -33,6 +33,13 @@
     - network_country.stdout | default('') | trim != network_wifi_country
   tags: [molecule-notest]
 
+# Pi OS always has NetworkManager; the test container doesn't. Handler tags
+# aren't honoured by --skip-tags when notified, so the handlers check this.
+- name: Look for nmcli
+  ansible.builtin.stat:
+    path: /usr/bin/nmcli
+  register: network_nmcli
+
 - name: Create NetworkManager's connection directory
   ansible.builtin.file:
     path: /etc/NetworkManager/system-connections

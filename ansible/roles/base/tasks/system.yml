@@ -58,8 +58,7 @@
   ansible.builtin.set_fact:
     base_admin_keys: >-
       {{ (lookup('ansible.builtin.file', base_admin_authorized_keys_file)
-          if base_admin_authorized_keys_file is file else '')
-         | regex_replace('\r', '') | split('\n')
+          if base_admin_authorized_keys_file is file else '').splitlines()
          | map('trim') | select('match', '^(ssh-|ecdsa-|sk-)') | list }}
 
 - name: Refuse to empty authorized_keys

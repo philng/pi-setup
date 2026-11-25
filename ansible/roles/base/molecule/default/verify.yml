@@ -132,7 +132,7 @@
           - base_verify_keys | select('search', 'molecule-two') | list | length == 1
       vars:
         base_verify_keys: >-
-          {{ base_verify_system.results[2].content | b64decode | split('\n') | select | list }}
+          {{ (base_verify_system.results[2].content | b64decode).splitlines() | select | list }}
 
     - name: Read the login user
       ansible.builtin.getent:
