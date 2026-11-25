@@ -6,9 +6,9 @@ computer.
 
 | Host | What it does | Inventory group | Roles |
 | --- | --- | --- | --- |
-| `pilab-living` (by the TV) | **USB-over-IP server**: 2.4 GHz controller dongles plug in here, and the gaming PC attaches them over the network so they work in Moonlight/Sunshine streams as if plugged in locally | `usbip` | base, tailscale, usbip, dotfiles |
-| `octopi` | **OctoPrint** for the Prusa MK3S+, with OctoEverywhere and a webcam | `printers` | base, tailscale, podman, octoprint, dotfiles |
-| `pilab-rack` | Shared roles only | `general` | base, tailscale, dotfiles |
+| `pilab-living` (by the TV) | **USB-over-IP server**: 2.4 GHz controller dongles plug in here, and the gaming PC attaches them over the network so they work in Moonlight/Sunshine streams as if plugged in locally | `usbip` | base, network, tailscale, usbip, dotfiles |
+| `octopi` | **OctoPrint** for the Prusa MK3S+, with OctoEverywhere and a webcam | `printers` | base, network, tailscale, podman, octoprint, dotfiles |
+| `pilab-rack` | Shared roles only | `general` | base, network, tailscale, dotfiles |
 
 ## Quickstart
 
@@ -113,12 +113,17 @@ Then give the Pi a **DHCP reservation** on your router so its address never chan
 
 ```bash
 make                       # list every target
-make apply                 # configure the Pis after changing anything
+make apply                 # configure the Pis after changing anything (deployed ones too)
 make apply LIMIT=octopi    # just one Pi (or group)
 make check                 # dry run with diff (a Pi needs one real make apply first)
 make health                # read-only health report
 make octoprint-backup      # copy OctoPrint settings to backups/octoprint/
 ```
+
+The card only gets a Pi onto the network with SSH. Everything else, even the
+first-boot settings (hostname, login user, SSH keys, Wi-Fi), is re-applied by
+`make apply`, so you change a deployed Pi by editing the repo or `secrets/` instead of
+re-flashing: [changing settings on deployed Pis](docs/changing-settings.md).
 
 `ansible/inventory/hosts.yml` lists only the Pis you actually have, so every target
 works with any subset of them. If a Pi isn't built yet, take it out of the inventory
@@ -164,6 +169,8 @@ More detail: [how your computer finds the Pis](docs/01-base-image.md#how-your-co
 - [OctoPrint](docs/octoprint.md): overrides, plugins, firmware updates, webcam focus, backups
 - [Running the setup from Windows (WSL)](docs/windows.md)
 - [Tailscale on every Pi](docs/tailscale.md): settings, auth keys for unattended runs
+- [Changing settings on deployed Pis](docs/changing-settings.md): SSH keys, Wi-Fi,
+  renaming a Pi, and which settings the card sets versus Ansible
 - [Working on the repo](docs/development.md): repo layout, pinned tools, testing, CI,
   hardware smoke tests, design choices
 

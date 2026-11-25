@@ -159,6 +159,15 @@ SSH_PUBKEY=$(head -n1 "$SSH_PUBKEY_FILE" | tr -d '\r')
 [[ $SSH_PUBKEY == ssh-* || $SSH_PUBKEY == ecdsa-* || $SSH_PUBKEY == sk-* ]] \
   || die "$SSH_PUBKEY_FILE doesn't look like an SSH public key"
 
+# Remember the key for Ansible: the base role keeps the login user's keys in
+# step with this file (git-ignored) on every make apply.
+KEYS_FILE=$REPO_ROOT/secrets/authorized_keys
+mkdir -p "$REPO_ROOT/secrets"
+if ! grep -qxF "$SSH_PUBKEY" "$KEYS_FILE" 2>/dev/null; then
+  printf '%s\n' "$SSH_PUBKEY" >> "$KEYS_FILE"
+  echo "Added the key to $KEYS_FILE, so make apply keeps it on every Pi." >&2
+fi
+
 # Keep whatever Imager wrote, in case you want to compare.
 for f in user-data network-config; do
   if [[ -f $BOOT/$f && ! -f $BOOT/$f.orig ]]; then
@@ -317,8 +326,6 @@ fi
 esc() { printf '%s' "$1" | sed 's/[&|\\]/\\&/g'; }
 sed -e "s|@PI_HOSTNAME@|$(esc "$PI_HOSTNAME")|g" \
     -e "s|@PI_USER@|$(esc "$PI_USER")|g" \
-    -e "s|@PI_TIMEZONE@|$(esc "$PI_TIMEZONE")|g" \
-    -e "s|@PI_KEYBOARD@|$(esc "$PI_KEYBOARD")|g" \
     -e "s|@SSH_PUBKEY@|$(esc "$SSH_PUBKEY")|g" \
     "$REPO_ROOT/bootstrap/cloud-init/user-data.tmpl" > "$BOOT/user-data"
 cp "$REPO_ROOT/bootstrap/cloud-init/network-config" "$BOOT/network-config"

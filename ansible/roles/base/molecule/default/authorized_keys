@@ -1,0 +1,4 @@
+# Throwaway test keys (no private halves were kept), in the format of
+# secrets/authorized_keys on your computer.
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNKZBjYiTAa5mPs3AQpuA8VsUjdNHrF/vwQCSbA666H molecule-one
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAZhboAB76VXJoySUcAj0En6qFLhrN2MvJTQCPWGo1de molecule-two

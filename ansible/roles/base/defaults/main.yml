@@ -1,5 +1,32 @@
 ---
 base_timezone: America/Los_Angeles
+# Console keyboard layout (only matters with a keyboard plugged into the Pi).
+base_keyboard_layout: us
+
+# --- Settings that used to be first-boot only ------------------------------
+# The card's cloud-init config only gets the Pi onto the network with SSH. These
+# are re-applied by every `make apply`, so changing them here changes deployed
+# Pis too.
+
+# The login user: the one Ansible logs in as (inventory/group_vars/pis.yml).
+base_admin_user: "{{ ansible_user }}"
+
+# Groups for the login user. Groups the Pi doesn't have are skipped.
+base_admin_groups: [users, adm, dialout, audio, netdev, video, plugdev, input, gpio, render, sudo]
+
+# Public keys allowed to log in as the login user, one per line (a plain
+# authorized_keys file). It lives on YOUR computer, git-ignored, and
+# scripts/configure-boot.sh adds each key it puts on a card. Missing or empty:
+# keys on the Pi are left as they are.
+base_admin_authorized_keys_file: "{{ playbook_dir }}/../secrets/authorized_keys"
+# true: the file is the whole list, so a key removed from it is removed from
+# every Pi on the next apply. Make sure the key you use is in the file first.
+base_admin_authorized_keys_exclusive: false
+
+# After the first apply, stop cloud-init from running again at boot: it would
+# otherwise put the card's hostname back into /etc/hosts on every boot, undoing
+# a hostname change made here. Re-flashing the card starts over anyway.
+base_disable_cloud_init: true
 
 base_packages:
   - chrony

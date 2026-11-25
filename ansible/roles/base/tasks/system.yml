@@ -1,0 +1,100 @@
+---
+# Everything the card's first-boot config (bootstrap/cloud-init/) used to be
+# the only place for. Kept here so `make apply` changes deployed Pis too.
+
+- name: Set hostname from inventory
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+# Debian resolves its own name through this line (sudo warns without it).
+- name: Point 127.0.1.1 at the hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1\t{{ inventory_hostname }}"
+    owner: root
+    group: root
+    mode: "0644"
+    unsafe_writes: true  # /etc/hosts is a bind mount in containers
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ base_timezone }}"
+
+- name: Set console keyboard layout
+  ansible.builtin.lineinfile:
+    path: /etc/default/keyboard
+    regexp: '^XKBLAYOUT='
+    line: 'XKBLAYOUT="{{ base_keyboard_layout }}"'
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- Login user --------------------------------------------------------------
+- name: List the groups this Pi has
+  ansible.builtin.getent:
+    database: group
+
+- name: Login user exists, in its groups, with no password
+  ansible.builtin.user:
+    name: "{{ base_admin_user }}"
+    groups: "{{ base_admin_groups | select('in', ansible_facts['getent_group']) | list }}"
+    append: true
+    password_lock: true
+
+- name: Login user may sudo without a password (it has none)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/010-pi-setup-admin
+    content: |
+      # Managed by Ansible (base role)
+      {{ base_admin_user }} ALL=(ALL) NOPASSWD:ALL
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Read the authorized keys file on this computer
+  ansible.builtin.set_fact:
+    base_admin_keys: >-
+      {{ (lookup('ansible.builtin.file', base_admin_authorized_keys_file)
+          if base_admin_authorized_keys_file is file else '')
+         | regex_replace('\r', '') | split('\n')
+         | map('trim') | select('match', '^(ssh-|ecdsa-|sk-)') | list }}
+
+- name: Refuse to empty authorized_keys
+  ansible.builtin.assert:
+    that: base_admin_keys | length > 0
+    fail_msg: >-
+      base_admin_authorized_keys_exclusive is true but {{ base_admin_authorized_keys_file }}
+      has no keys: that would lock you out of {{ inventory_hostname }}.
+  when: base_admin_authorized_keys_exclusive | bool
+
+- name: Authorized SSH keys for the login user
+  ansible.posix.authorized_key:
+    user: "{{ base_admin_user }}"
+    key: "{{ base_admin_keys | join('\n') }}"
+    exclusive: "{{ base_admin_authorized_keys_exclusive | bool }}"
+  when: base_admin_keys | length > 0
+
+# --- First-boot leftovers ----------------------------------------------------
+- name: Stop cloud-init from re-running at boot
+  when: base_disable_cloud_init | bool
+  block:
+    - name: Create cloud-init config directory
+      ansible.builtin.file:
+        path: /etc/cloud
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Disable cloud-init (the card's config was first boot only)
+      ansible.builtin.copy:
+        dest: /etc/cloud/cloud-init.disabled
+        content: |
+          Disabled by Ansible (base role): pi-setup manages this Pi now.
+          Set base_disable_cloud_init: false and delete this file to undo.
+        owner: root
+        group: root
+        mode: "0644"

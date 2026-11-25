@@ -64,7 +64,10 @@ The sections below are the same steps by hand.
 ## 1. Review the settings
 
 Edit [`bootstrap/pi.env`](../bootstrap/pi.env) if you want a different default
-hostname or timezone. The login user isn't there: it is `ansible_user` in
+hostname. The card only gets the Pi onto the network with SSH; the timezone and
+everything else are Ansible's, and `make apply` re-applies even the first-boot
+settings, so you can change them later without re-flashing
+([changing-settings.md](changing-settings.md)). The login user isn't there: it is `ansible_user` in
 `ansible/inventory/group_vars/pis.yml`, and `configure-boot` reads it from there so
 the Pi and Ansible always agree. A new hostname also needs an entry in
 `ansible/inventory/hosts.yml`, under `usbip`, `printers` or `general` (`configure-boot` warns
@@ -119,7 +122,9 @@ This only writes `user-data`, `network-config` and `meta-data` into that folder.
 It checks the folder really is a Pi boot partition first, keeps Imager's original
 files as `*.orig`, and needs no sudo or admin rights (apart from the WSL mount). Raspberry Pi OS (Trixie and later) reads these
 files with cloud-init on first boot to set the hostname, create your user with your
-SSH key, disable password login and turn on SSH.
+SSH key, disable password login and turn on SSH. The script also adds the key to
+`secrets/authorized_keys` (git-ignored), which Ansible uses to keep each Pi's keys in
+step from then on.
 
 Eject the drive (Finder, File Explorer, or `udisksctl unmount -b /dev/sdX1` on Linux).
 

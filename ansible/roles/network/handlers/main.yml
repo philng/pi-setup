@@ -1,0 +1,15 @@
+---
+# Reload re-reads the files. Bringing the connection up needs a Wi-Fi chip and
+# NetworkManager, so only on a real Pi; Ethernet isn't touched either way.
+- name: Apply Wi-Fi connection
+  ansible.builtin.command: nmcli connection reload
+  changed_when: true
+  notify: Bring up Wi-Fi
+  tags: [molecule-notest]
+
+- name: Bring up Wi-Fi
+  ansible.builtin.command: nmcli connection up {{ network_wifi_connection }}
+  changed_when: true
+  failed_when: false  # out of range, or a wrong password: Ethernet still works
+  when: network_wifi_state == 'present' and network_wifi_ssid | length > 0
+  tags: [molecule-notest]

@@ -1,0 +1,27 @@
+# Managed by Ansible (network role). Credentials come from secrets/wifi.yml.
+[connection]
+id={{ network_wifi_connection }}
+type=wifi
+interface-name=wlan0
+autoconnect=true
+# Above a first-boot connection to the same network (priority 0), so a changed
+# password here wins.
+autoconnect-priority=10
+
+[wifi]
+mode=infrastructure
+ssid={{ network_wifi_ssid }}
+
+{% if network_wifi_password | length > 0 %}
+[wifi-security]
+key-mgmt=wpa-psk
+psk={{ network_wifi_password }}
+
+{% endif %}
+[ipv4]
+method=auto
+route-metric={{ network_wifi_route_metric }}
+
+[ipv6]
+method=auto
+route-metric={{ network_wifi_route_metric }}

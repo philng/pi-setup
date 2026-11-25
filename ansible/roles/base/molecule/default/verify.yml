@@ -100,3 +100,80 @@
       register: base_verify_wd
       changed_when: false
       failed_when: base_verify_wd.stdout != 'RuntimeWatchdogUSec=15s'
+
+    # Settings that used to be first-boot only (bootstrap/cloud-init/).
+    - name: Read hosts, timezone, keyboard and authorized_keys
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/hosts
+        - /etc/default/keyboard
+        - /home/admin/.ssh/authorized_keys
+      register: base_verify_system
+
+    - name: Read the timezone link
+      ansible.builtin.stat:
+        path: /etc/localtime
+      register: base_verify_tz
+
+    - name: Hostname in /etc/hosts, timezone and keyboard applied
+      ansible.builtin.assert:
+        that:
+          - base_verify_system.results[0].content | b64decode is search('(?m)^127\\.0\\.1\\.1\\s+pi$')
+          - "'raspberrypi' not in (base_verify_system.results[0].content | b64decode)"
+          - "'XKBLAYOUT=\"us\"' in (base_verify_system.results[1].content | b64decode)"
+          - base_verify_tz.stat.lnk_source is search('Europe/London')
+
+    - name: Exactly the keys in the keys file (the stray one is gone)
+      ansible.builtin.assert:
+        that:
+          - base_verify_keys | length == 2
+          - base_verify_keys | select('search', 'molecule-one') | list | length == 1
+          - base_verify_keys | select('search', 'molecule-two') | list | length == 1
+      vars:
+        base_verify_keys: >-
+          {{ base_verify_system.results[2].content | b64decode | split('\n') | select | list }}
+
+    - name: Read the login user
+      ansible.builtin.getent:
+        database: shadow
+        key: admin
+
+    - name: Login user has no usable password
+      ansible.builtin.assert:
+        that: ansible_facts['getent_shadow']['admin'][0] is match('!')
+
+    - name: Read the login user's groups
+      ansible.builtin.command: id -nG admin
+      register: base_verify_groups
+      changed_when: false
+
+    - name: Login user is in sudo and dialout (groups the Pi lacks are skipped)
+      ansible.builtin.assert:
+        that:
+          - "'sudo' in base_verify_groups.stdout.split()"
+          - "'dialout' in base_verify_groups.stdout.split()"
+
+    - name: Login user can sudo without a password
+      ansible.builtin.command: sudo -n -u admin sudo -n true
+      changed_when: false
+
+    - name: Read cloud-init's off switch
+      ansible.builtin.stat:
+        path: /etc/cloud/cloud-init.disabled
+      register: base_verify_ci
+
+    - name: Cloud-init won't run again at boot
+      ansible.builtin.assert:
+        that: base_verify_ci.stat.exists
+
+    - name: Read SSH service state
+      ansible.builtin.systemd_service:
+        name: ssh
+      register: base_verify_ssh
+
+    - name: SSH is enabled and running
+      ansible.builtin.assert:
+        that:
+          - base_verify_ssh.status.ActiveState == 'active'
+          - base_verify_ssh.status.UnitFileState == 'enabled'

@@ -1,0 +1,25 @@
+---
+# Optional Wi-Fi, re-applied by every `make apply`, so changing the network or
+# its password here changes deployed Pis too. Ethernet stays the main link:
+# Wi-Fi gets a higher route metric (600 against Ethernet's 100), the same as the
+# card's first-boot config from scripts/configure-boot.sh.
+#
+# The credentials never go in the repo. Put them in secrets/wifi.yml on YOUR
+# computer (git-ignored, the same file configure-boot.sh reads):
+#   wifi_ssid: "MyNetwork"
+#   wifi_password: "..."
+#   wifi_country: "US"
+# No file and no wifi_ssid: Wi-Fi is left as it is.
+network_wifi_file: "{{ playbook_dir }}/../secrets/wifi.yml"
+
+# Read from network_wifi_file when these aren't set elsewhere.
+network_wifi_ssid: "{{ wifi_ssid | default('') }}"
+network_wifi_password: "{{ wifi_password | default('') }}"
+network_wifi_country: "{{ wifi_country | default('US') }}"
+
+# present: manage the Wi-Fi connection. absent: remove the one this role made
+# (the first-boot one from the card, if any, is a separate connection: see docs).
+network_wifi_state: present
+network_wifi_route_metric: 600
+# NetworkManager connection name and file.
+network_wifi_connection: pi-setup-wifi

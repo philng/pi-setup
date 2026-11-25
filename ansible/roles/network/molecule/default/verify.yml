@@ -1,0 +1,33 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read the Wi-Fi connection file
+      ansible.builtin.stat:
+        path: /etc/NetworkManager/system-connections/pi-setup-wifi.nmconnection
+      register: network_verify_stat
+
+    - name: Only root can read it (it holds the password)
+      ansible.builtin.assert:
+        that:
+          - network_verify_stat.stat.exists
+          - network_verify_stat.stat.mode == '0600'
+          - network_verify_stat.stat.pw_name == 'root'
+
+    - name: Read its content
+      ansible.builtin.slurp:
+        src: /etc/NetworkManager/system-connections/pi-setup-wifi.nmconnection
+      register: network_verify_conn
+
+    - name: Settings from the file, Ethernet preferred over Wi-Fi
+      ansible.builtin.assert:
+        that:
+          - "'ssid=Test Net' in network_verify_text"
+          - "'psk=not-a-real-password' in network_verify_text"
+          - "'key-mgmt=wpa-psk' in network_verify_text"
+          - "'route-metric=600' in network_verify_text"
+          - "'interface-name=wlan0' in network_verify_text"
+      vars:
+        network_verify_text: "{{ network_verify_conn.content | b64decode }}"

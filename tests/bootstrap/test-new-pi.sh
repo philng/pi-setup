@@ -354,5 +354,16 @@ if CONFIGURE_BOOT_INTERACTIVE=1 run --yes --role printer --hostname octopi --boo
   pass "new-pi Wi-Fi options"
 else fail "new-pi Wi-Fi options"; cat "$WORK/out"; fi
 
+# 18. The key goes into secrets/authorized_keys for Ansible, once however often
+#     a card is written, next to keys already there.
+setup
+mkdir -p "$WORK/repo/secrets"
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIother other@example" > "$WORK/repo/secrets/authorized_keys"
+if cb "$WORK/boot" </dev/null >"$WORK/out" 2>&1 && cb "$WORK/boot" </dev/null >>"$WORK/out" 2>&1 \
+  && [[ $(grep -c "test@example" "$WORK/repo/secrets/authorized_keys") -eq 1 ]] \
+  && grep -q "other@example" "$WORK/repo/secrets/authorized_keys"; then
+  pass "configure-boot remembers the key for Ansible"
+else fail "configure-boot remembers the key for Ansible"; cat "$WORK/out"; fi
+
 [[ $fails -eq 0 ]] || { echo "$fails test(s) failed"; exit 1; }
 echo "all new-pi tests passed"
