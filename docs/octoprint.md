@@ -20,7 +20,7 @@ Same as [01-base-image.md](01-base-image.md): run `make new-pi` and answer `prin
 ```bash
 PI_HOSTNAME=octopi scripts/configure-boot.sh /run/media/$USER/bootfs   # Linux
 PI_HOSTNAME=octopi scripts/configure-boot.sh /Volumes/bootfs           # macOS
-PI_HOSTNAME=octopi scripts/configure-boot.sh /mnt/e                    # Windows, in WSL
+PI_HOSTNAME=octopi scripts/configure-boot.sh E:                        # Windows, in WSL
 ```
 
 Boot it on Ethernet, then check it answers: `make ping LIMIT=octopi`.

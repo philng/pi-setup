@@ -40,7 +40,8 @@ It walks you through the rest and explains each step:
    An existing name is treated as a re-flash and the inventory is left alone.
 3. **Login and SSH key.** You always log in as `admin` (`ansible_user` in
    `ansible/inventory/group_vars/pis.yml`, the one place it's set). It offers your
-   `~/.ssh/id_ed25519.pub`, or to create a key if you have none.
+   `~/.ssh/id_ed25519.pub`, or (in WSL) to copy your Windows key into WSL, or to
+   create a key if you have none.
 4. **The card.** It finds the mounted `bootfs` partition: `/Volumes/bootfs` on macOS,
    `/run/media/$USER/bootfs` on Linux (offering to mount it with `udisksctl` if Sway
    didn't), or in WSL by asking Windows which drive is labelled `bootfs` and
@@ -94,11 +95,11 @@ scripts/configure-boot.sh /Volumes/bootfs
 ```
 
 **Windows, in WSL.** The card shows up as a drive letter in File Explorer, for
-example `E:`. Mount it in WSL, then run the script there:
+example `E:`. WSL doesn't mount it by itself; give the script the letter and it
+offers to mount it at `/mnt/e` (with sudo) before writing:
 
 ```bash
-sudo mkdir -p /mnt/e && sudo mount -t drvfs E: /mnt/e -o uid=$(id -u),gid=$(id -g)
-scripts/configure-boot.sh /mnt/e
+scripts/configure-boot.sh E:
 ```
 
 **Linux / Fedora Sway Atomic.** Find the partition with

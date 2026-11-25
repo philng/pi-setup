@@ -43,7 +43,7 @@ Every Pi gets these shared roles:
 | --- | --- |
 | `bootstrap/` | First-boot settings (cloud-init) written onto the boot partition when flashing |
 | `scripts/new-pi.sh` (`make new-pi`) | Guided setup for a new or re-flashed Pi: asks its role and name, adds it to the inventory, writes the card, waits for first boot |
-| `scripts/configure-boot.sh` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows (in WSL) |
+| `scripts/configure-boot.sh` | Adds the first-boot settings to a card/SSD you flashed with Raspberry Pi Imager. Plain file copy, no sudo. Linux, macOS and Windows (in WSL, where it also mounts the card and finds your Windows SSH key) |
 | `ansible/` | Everything after first boot: one role per service, applied with `make apply` |
 | `client/` | Gaming PC side of usbip ([docs/03-client.md](docs/03-client.md)) |
 | `docs/` | Step-by-step guides (see [Guides](#guides)) |
@@ -92,7 +92,7 @@ Or by hand:
 
 ```bash
 scripts/configure-boot.sh /run/media/$USER/bootfs   # first-boot settings (macOS: /Volumes/bootfs,
-                                                     # Windows: /mnt/e in WSL)
+                                                     # Windows, in WSL: E:)
 make ping && make apply                              # after the Pi boots
 ```
 

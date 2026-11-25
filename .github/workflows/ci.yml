@@ -94,6 +94,7 @@ jobs:
             boot:
               - *shared
               - scripts/configure-boot.*
+              - scripts/lib/**
               - scripts/new-pi.sh
               - bootstrap/**
               - tests/bootstrap/**
