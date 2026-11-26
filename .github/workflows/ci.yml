@@ -97,6 +97,7 @@ jobs:
               - scripts/configure-boot.*
               - scripts/lib/**
               - scripts/new-pi.sh
+              - scripts/ssh-hints.sh
               - bootstrap/**
               - tests/bootstrap/**
       # Anything but a PR (push to main, weekly, manual) runs everything.
@@ -175,6 +176,9 @@ jobs:
       - name: New-Pi wizard tests
         if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.new_pi_tests == 'true' }}
         run: tests/bootstrap/test-new-pi.sh
+      - name: make ping hint tests
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && needs.changes.outputs.new_pi_tests == 'true' }}
+        run: tests/bootstrap/test-ssh-hints.sh
 
   # Each role's Molecule scenario in an arm64 Debian trixie container with
   # systemd: install, converge, a second run that must change nothing, verify.
@@ -269,6 +273,9 @@ jobs:
       - name: New-Pi wizard tests
         if: runner.os == 'macOS'
         run: tests/bootstrap/test-new-pi.sh
+      - name: make ping hint tests
+        if: runner.os == 'macOS'
+        run: tests/bootstrap/test-ssh-hints.sh
 
   # The one check to require: passes when every job passed or was skipped.
   ci-ok:

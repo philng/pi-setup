@@ -2,3 +2,10 @@
 # The login user on every Pi. scripts/configure-boot.sh reads it from here
 # and creates it on first boot, so change it only here (then re-flash).
 ansible_user: admin
+
+# Tailscale SSH: over the tailnet, logins are checked against your Tailscale
+# account and the tailnet policy, not SSH keys, so any computer signed in to your
+# tailnet can run make apply without its key in secrets/authorized_keys. SSH over
+# the LAN still takes keys only. Your tailnet policy needs an "accept" SSH rule;
+# see docs/tailscale.md#tailscale-ssh.
+tailscale_ssh: true

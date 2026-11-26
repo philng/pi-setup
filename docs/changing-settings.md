@@ -53,6 +53,24 @@ mkdir -p secrets && cat ~/.ssh/id_ed25519.pub >> secrets/authorized_keys
   exclusive with an empty file.
 - No file, or an empty one: the keys on the Pis are left as they are.
 
+## A second computer
+
+Everything in `secrets/` (SSH keys, Wi-Fi, the OctoPrint password, a VirtualHere
+licence) is git-ignored, so a fresh clone on another computer, a laptop say, has
+none of it. To run `make` from there:
+
+1. **Reaching the Pis.** Sign the laptop in to your tailnet. With Tailscale SSH (on in
+   this repo, see [tailscale.md](tailscale.md#tailscale-ssh)) the Pis let it in over
+   the tailnet without its key. Without Tailscale, add its public key to
+   `secrets/authorized_keys` on a computer that already works and `make apply` there.
+   `make ping` on the laptop says which of these is missing.
+2. **The secrets.** Copy the `secrets/` folder over yourself (for example with
+   `scp -r secrets/ laptop:pi-setup/`, or a password manager), never through git.
+   Without it, `make apply` still works and leaves Wi-Fi and the SSH keys as they
+   are on the Pis, and writes a new, unused `secrets/octoprint-admin-octopi`
+   (OctoPrint keeps its existing admin). But it **drops the VirtualHere licence**
+   from a Pi that has one, so copy `secrets/` before applying to that Pi.
+
 ## Wi-Fi
 
 Wi-Fi is optional; Ethernet stays the main link. The **network** role reads the
