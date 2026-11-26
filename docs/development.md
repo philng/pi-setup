@@ -85,9 +85,9 @@ What CI can't prove is checked by hand on the Pis:
   setup through cloud-init, and what USBAnywhere's Pi fixes are tested on.
 - **One repo, one Ansible role per service.** New services are new roles; new Pis are
   new inventory groups.
-- **Host vs. containers.** usbip and VirtualHere run on the host, because each owns the
-  Pi's USB hardware (usbip is kernel modules plus a daemon; VirtualHere ships a native
-  binary and systemd unit). Other services run as rootless Podman containers managed
-  by Quadlet, so each one is a normal systemd unit.
+- **Host vs. containers.** usbip runs on the host (it is kernel modules plus a daemon
+  that owns the USB hardware). Other services run as Podman containers managed by
+  Quadlet, so each one is a normal systemd unit: rootless where possible, rootful and
+  privileged for VirtualHere, which owns the USB hardware too.
 - **SD card now, USB SSD later.** Moving to the SSD is "flash the SSD, re-run Ansible",
   not cloning.

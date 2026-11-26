@@ -32,3 +32,6 @@ usbip_ports: []
 usbip_manage_kernel: >-
   {{ ansible_facts['virtualization_type'] | default('')
      not in ['docker', 'podman', 'container', 'containerd'] }}
+
+# Switching a Pi back from VirtualHere removes this image (virtualhere_image).
+usbip_virtualhere_image: docker.io/library/debian:trixie-slim

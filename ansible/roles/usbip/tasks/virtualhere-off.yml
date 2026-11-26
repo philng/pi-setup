@@ -1,21 +1,31 @@
 ---
 # Undo the virtualhere role on a Pi switched back to usbip, so the two never
 # fight over the same dongles. Does nothing on a Pi that never ran VirtualHere.
-# Its binary and config.ini stay, so switching back keeps its settings.
-- name: Look for VirtualHere's unit
+# Removes its container, image and binary; only its settings folder
+# (/usr/local/etc/virtualhere, with nicknames and licence) stays, so switching
+# back keeps them.
+- name: Look for VirtualHere's units
   ansible.builtin.stat:
-    path: /etc/systemd/system/virtualhere.service
-  register: usbip_virtualhere_unit
+    path: "{{ item }}"
+  loop:
+    - /etc/containers/systemd/virtualhere.container
+    - /etc/systemd/system/virtualhere.service  # the native one, before containers
+  register: usbip_virtualhere_units
 
-- name: Stop and disable VirtualHere
+- name: Stop VirtualHere
   ansible.builtin.systemd_service:
     name: virtualhere
     state: stopped
-    enabled: false
-  when: usbip_virtualhere_unit.stat.exists
+  when: usbip_virtualhere_units.results | selectattr('stat.exists') | list | length > 0
 
-- name: Close VirtualHere's firewall opening
+- name: Remove VirtualHere's unit, binary and firewall opening
   ansible.builtin.file:
-    path: /etc/nftables.d/35-virtualhere.nft
+    path: "{{ item }}"
     state: absent
-  notify: Reload nftables
+  loop:
+    - /etc/containers/systemd/virtualhere.container
+    - /etc/systemd/system/virtualhere.service
+    - /usr/local/lib/virtualhere
+    - /usr/local/sbin/vhusbdarm64
+    - /etc/nftables.d/35-virtualhere.nft
+  notify: [Reload nftables, Reload systemd, Remove VirtualHere's base image]

@@ -1,0 +1,36 @@
+# {{ ansible_managed }}
+# VirtualHere USB Server in a rootful container, generated into
+# virtualhere.service by Quadlet.
+[Unit]
+Description=VirtualHere USB Server
+Wants=network-online.target
+After=network-online.target
+# Never alongside usbip, which shares the same dongles.
+Conflicts=usbipd.service
+
+[Container]
+ContainerName=virtualhere
+Image={{ virtualhere_image }}
+{% if virtualhere_auto_update | bool %}
+AutoUpdate=registry
+{% endif %}
+# The server claims USB devices from the kernel through usbfs and sysfs, so it
+# needs full privileges (which include the host's /dev/bus/usb).
+PodmanArgs=--privileged
+# Host network: port {{ virtualhere_port }}, and Bonjour so Windows finds the Pi by itself.
+Network=host
+Volume={{ virtualhere_binary_dir }}/vhusbdarm64:/usr/local/sbin/vhusbd:ro
+Volume={{ virtualhere_config_dir }}:/config
+# Announce the server through the Pi's own avahi.
+Volume=/run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+Exec=/usr/local/sbin/vhusbd -c /config/config.ini
+
+[Service]
+ExecStartPre=/usr/local/libexec/virtualhere-config {{ virtualhere_config_dir }}/managed.ini {{ virtualhere_config_dir }}/config.ini
+Restart=always
+RestartSec=5
+# The first start pulls the base image.
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
