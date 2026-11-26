@@ -1,0 +1,8 @@
+---
+# What shares the controller dongles on this Pi (see docs/virtualhere.md):
+#   usbip        free, open source; Windows attaches with usbip-win2 (or the
+#                USBAnywhere GUI on the same driver)
+#   virtualhere  VirtualHere USB Server in a container; Windows uses the
+#                VirtualHere client. Free for one device at a time.
+# Change it and run: make apply LIMIT=pilab-living (the other one is turned off).
+usb_server: virtualhere
