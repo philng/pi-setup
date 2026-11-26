@@ -8,12 +8,23 @@
 # hardware and removes the limit. Run exactly one server per Pi: running extra
 # servers or containers to get more free devices breaks VirtualHere's licence.
 
+# The server runs in a rootful Podman container (Quadlet) from a stock Debian
+# image. VirtualHere's own binary is downloaded on the Pi and mounted in, so no
+# custom image is built or published: VirtualHere's licence only grants use,
+# not redistribution. The container needs full privileges and the Pi's USB bus
+# (it owns the dongles, like usbip), so this tidies installing and removing,
+# it doesn't isolate anything.
+virtualhere_image: docker.io/library/debian:trixie-slim
+# Pull a newer base image daily (podman-auto-update.timer), rolling back if
+# the new one fails to start.
+virtualhere_auto_update: true
+
 # VirtualHere's own arm64 build, as its install script uses. VirtualHere
 # publishes no checksums or versioned URLs; set a "sha256:..." here to pin the
 # build you have tested (make apply then stops if the download differs).
 virtualhere_binary_url: https://www.virtualhere.com/sites/default/files/usbserver/vhusbdarm64
 virtualhere_binary_checksum: ""
-virtualhere_binary: /usr/local/sbin/vhusbdarm64
+virtualhere_binary_dir: /usr/local/lib/virtualhere
 # true: download again on every apply (picks up VirtualHere's new releases).
 # false: keep the build already on the Pi.
 virtualhere_update: false
@@ -49,8 +60,8 @@ virtualhere_license: >-
   {{ lookup('ansible.builtin.file', virtualhere_license_file)
      if virtualhere_license_file is file else '' }}
 
-# Start the server. Off automatically inside containers (Molecule) where there
-# is no real USB bus to claim.
+# Start the server during make apply. Off automatically inside containers
+# (Molecule), whose verify step starts it separately.
 virtualhere_start: >-
   {{ ansible_facts['virtualization_type'] | default('')
      not in ['docker', 'podman', 'container', 'containerd'] }}

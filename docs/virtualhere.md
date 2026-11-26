@@ -23,15 +23,26 @@ your computer, never in the repo.
 
 ## How it runs on the Pi
 
-VirtualHere ships a native arm64 binary (`vhusbdarm64`) and a systemd unit in
-its own install script, so the role uses those, not a container. Like usbip, the
-server has to own the Pi's USB hardware, so a container would need full
-privileges and the host's USB bus, and you'd gain nothing from it.
+The server runs in a **rootful Podman container** managed by Quadlet, so it's
+one unit file plus an image, and switching back to usbip removes all of it.
+There is no custom image: the container is stock `debian:trixie-slim`, and
+VirtualHere's own arm64 binary (`vhusbdarm64`) is downloaded on the Pi and
+mounted in. That keeps us clear of VirtualHere's licence, which allows using
+the server but not redistributing it, so we never publish an image with it
+inside.
+
+Like usbip, the server has to own the Pi's USB hardware, so the container runs
+privileged with host networking. That makes installing and removing it tidier,
+but it isn't isolated from the Pi.
 
 The role:
 
-- downloads `vhusbdarm64` to `/usr/local/sbin/` and runs it as
-  `virtualhere.service` (config in `/usr/local/etc/virtualhere/config.ini`)
+- installs Podman, downloads `vhusbdarm64` to `/usr/local/lib/virtualhere/`, and
+  runs it from `/etc/containers/systemd/virtualhere.container` as
+  `virtualhere.service` (config in `/usr/local/etc/virtualhere/config.ini`,
+  mounted into the container)
+- keeps the base image current: `podman-auto-update.timer` pulls a newer one
+  daily and rolls back if it fails to start
 - shares **only** the dongles in `virtualhere_devices` (VirtualHere's
   `AllowedDevices`). By default these match the usbip list: every Valve device
   (`28de:*`, so the Puck `28de:1304` and the wired controller `28de:1302` too),
@@ -39,9 +50,13 @@ The role:
   XInput-mode receivers (`045e:028e`). The boot SSD is never shared.
 - opens TCP 7575 to the LAN (and the tailnet), and closes usbip's 3240
 - turns usbip off: it stops and disables `usbipd`, removes the auto-export udev
-  rules, and hands exported dongles back to the Pi. Switching back to usbip turns
-  VirtualHere off the same way. The two units also `Conflicts=` each other in
-  systemd.
+  rules, and hands exported dongles back to the Pi. The two units also
+  `Conflicts=` each other in systemd.
+
+Switching back to usbip stops VirtualHere and removes its container unit,
+binary, base image and firewall opening. Only `/usr/local/etc/virtualhere/`
+stays (device nicknames, a licence entered from the client), so switching to
+VirtualHere again picks up where you left off.
 
 Ansible owns only `ServerName`, `AllowedDevices` and (if you have one) `License`
 in `config.ini`. They are merged in each time the server starts, so whatever
@@ -55,6 +70,7 @@ kept.
 | `virtualhere_license_file` | `secrets/virtualhere-license-<host>` | Licence key file on your computer |
 | `virtualhere_binary_checksum` | `""` | `sha256:...` to pin the build you tested |
 | `virtualhere_update` | `false` | `true` to download VirtualHere's latest build on every apply |
+| `virtualhere_auto_update` | `true` | Pull a newer base image daily |
 
 ## 1. Switch a Pi to VirtualHere
 
@@ -168,9 +184,11 @@ set up on Windows this also works straight after Wake-on-LAN.
 The role's Molecule scenario (in CI, on arm64) starts from a Pi running usbip,
 switches it to VirtualHere, applies twice (the second run must change nothing),
 then checks that usbip is fully off and its port is closed, that 7575 is open,
-that only the dongles are allowed, that the licence key came from the secrets
-file, and that the config merge keeps VirtualHere's own settings. It then starts
-the real `vhusbdarm64` and checks it listens on 7575.
+that Quadlet accepts the container file, that only the dongles are allowed, that
+the licence key came from the secrets file, and that the config merge keeps
+VirtualHere's own settings. It then starts the real `vhusbdarm64` in its
+container and checks it listens on 7575. Finally it switches back to usbip and
+checks that the container, image, binary and firewall opening are gone.
 
 Run it locally with `make molecule ROLE=virtualhere`.
 
@@ -180,7 +198,8 @@ What CI can't prove, because it needs your hardware:
 
 1. Set `usb_server: virtualhere` for `pilab-living`, then `make apply LIMIT=pilab-living`
    twice. The second run reports `changed=0`.
-2. On the Pi: `systemctl is-active virtualhere` says `active`, and
+2. On the Pi: `systemctl is-active virtualhere` says `active`,
+   `sudo podman ps` lists the `virtualhere` container, and
    `systemctl is-enabled usbipd` says `disabled`. `make health LIMIT=pilab-living`
    passes and shows `VirtualHere: active`.
 3. From the gaming PC: `usbip list -r pilab-living` can't connect (3240 is closed).
@@ -197,5 +216,6 @@ What CI can't prove, because it needs your hardware:
 8. `ssh admin@pilab-living sudo reboot`: after the reboot the client re-attaches
    the dongles by itself.
 9. Switch back (`usb_server: usbip`, `make apply LIMIT=pilab-living`):
-   `systemctl is-enabled virtualhere` says `disabled`, `usbipd` runs, and
-   `usbip list -r pilab-living` lists the dongles again.
+   `sudo podman ps -a` and `sudo podman images` no longer show VirtualHere or
+   `debian:trixie-slim`, `usbipd` runs, and `usbip list -r pilab-living` lists
+   the dongles again.

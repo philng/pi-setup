@@ -30,7 +30,7 @@
           echo "usbipd=$(systemctl is-active usbipd)"
           echo "exported=$(ls /sys/bus/usb/drivers/usbip-host 2>/dev/null | grep -E '^[0-9]+-' | paste -sd, -)"
         fi
-        if systemctl is-enabled virtualhere >/dev/null 2>&1; then
+        if [ -e /etc/containers/systemd/virtualhere.container ]; then
           echo "virtualhere=$(systemctl is-active virtualhere)"
         fi
       args:

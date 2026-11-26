@@ -2,22 +2,30 @@
 - name: Verify
   hosts: all
   become: true
-  gather_facts: false
+  gather_facts: true  # the usbip role, applied at the end, reads them
   vars:
     virtualhere_verify_conf: /usr/local/etc/virtualhere
   tasks:
     - name: Find the server binary
       ansible.builtin.stat:
-        path: /usr/local/sbin/vhusbdarm64
+        path: /usr/local/lib/virtualhere/vhusbdarm64
       register: virtualhere_verify_bin
 
     - name: The arm64 server is installed and executable
       ansible.builtin.assert:
         that: virtualhere_verify_bin.stat.executable
 
-    - name: Systemd accepts the units
-      ansible.builtin.command: >-
-        systemd-analyze verify /etc/systemd/system/virtualhere.service /etc/systemd/system/usbipd.service
+    - name: Quadlet turns the container file into a unit
+      ansible.builtin.command: /usr/lib/systemd/system-generators/podman-system-generator --dryrun
+      register: virtualhere_verify_quadlet
+      changed_when: false
+      failed_when: >-
+        virtualhere_verify_quadlet.rc != 0
+        or '---virtualhere.service---' not in virtualhere_verify_quadlet.stdout
+        or '--privileged' not in virtualhere_verify_quadlet.stdout
+
+    - name: Systemd accepts usbip's unit (it conflicts with VirtualHere's)
+      ansible.builtin.command: systemd-analyze verify /etc/systemd/system/usbipd.service
       changed_when: false
 
     - name: Gather service state
@@ -26,7 +34,7 @@
     - name: VirtualHere is enabled and usbip is switched off
       ansible.builtin.assert:
         that:
-          - ansible_facts.services['virtualhere.service'].status == 'enabled'
+          - ansible_facts.services['virtualhere.service'].status == 'generated'
           - ansible_facts.services['usbipd.service'].status == 'disabled'
           - ansible_facts.services['usbipd.service'].state != 'running'
 
@@ -97,19 +105,21 @@
               '600', 'ServerName=new', 'AllowedDevices=1/2']
         fail_msg: "{{ virtualhere_verify_merge.stdout_lines }}"
 
-    # The real server, started from its unit (without the fake licence, which
-    # it would rightly refuse): it must come up and listen on its port.
+    # The real server, in its container from its Quadlet unit (without the fake
+    # licence, which it would rightly refuse): it must come up and listen on
+    # its port. The first start pulls the base image.
     - name: Start the server without the fake licence
       ansible.builtin.shell: |
         set -eo pipefail
         sed -i '/^License=/d' {{ virtualhere_verify_conf }}/managed.ini
         rm -f {{ virtualhere_verify_conf }}/config.ini
         systemctl start virtualhere
-        for _ in $(seq 20); do
+        for _ in $(seq 60); do
           ss -Hltn 'sport = :7575' | grep -q . && exit 0
           sleep 0.5
         done
         systemctl status virtualhere --no-pager || true
+        journalctl -u virtualhere --no-pager | tail -30
         exit 1
       args:
         executable: /bin/bash
@@ -120,3 +130,50 @@
       register: virtualhere_verify_config
       changed_when: false
       failed_when: "'AllowedDevices=28de/*' not in virtualhere_verify_config.stdout"
+
+    - name: The server runs in its container
+      ansible.builtin.command: podman container exists virtualhere
+      changed_when: false
+
+    # Switching back to usbip must leave nothing of VirtualHere running or
+    # installed, except its settings folder.
+    - name: Switch back to usbip
+      ansible.builtin.include_role:
+        name: usbip
+
+    - name: Run its handlers now
+      ansible.builtin.meta: flush_handlers
+
+    - name: Look for VirtualHere's leftovers
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/containers/systemd/virtualhere.container
+        - /usr/local/lib/virtualhere
+        - /etc/nftables.d/35-virtualhere.nft
+      register: virtualhere_verify_left
+
+    - name: Look for the container and its image
+      ansible.builtin.shell: |
+        podman container exists virtualhere && echo container
+        podman image exists docker.io/library/debian:trixie-slim && echo image
+        systemctl is-active virtualhere || true
+      register: virtualhere_verify_podman
+      changed_when: false
+      failed_when: false
+
+    - name: VirtualHere is gone and usbip is back
+      ansible.builtin.assert:
+        that:
+          - virtualhere_verify_left.results | selectattr('stat.exists') | list | length == 0
+          - "'container' not in virtualhere_verify_podman.stdout_lines"
+          - "'image' not in virtualhere_verify_podman.stdout_lines"
+          - "'active' not in virtualhere_verify_podman.stdout_lines"
+        fail_msg: "{{ virtualhere_verify_podman.stdout_lines }}"
+
+    - name: Gather service state again
+      ansible.builtin.service_facts:
+
+    - name: Usbipd is enabled again
+      ansible.builtin.assert:
+        that: ansible_facts.services['usbipd.service'].status == 'enabled'

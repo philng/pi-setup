@@ -8,6 +8,24 @@
     - base
     - usbip
   post_tasks:
+    # Test container only: Podman's overlay storage can't sit on Docker's
+    # overlay root filesystem, so use plain directories (the Pi uses overlay).
+    - name: Create Podman's config folder
+      ansible.builtin.file:
+        path: /etc/containers
+        state: directory
+        mode: "0755"
+
+    - name: Use vfs storage for Podman in the test container
+      ansible.builtin.copy:
+        dest: /etc/containers/storage.conf
+        content: |
+          [storage]
+          driver = "vfs"
+          runroot = "/run/containers/storage"
+          graphroot = "/var/lib/containers/storage"
+        mode: "0644"
+
     - name: Write a fake licence file on the controller
       ansible.builtin.copy:
         dest: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/virtualhere-license"

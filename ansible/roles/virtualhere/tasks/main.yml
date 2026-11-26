@@ -13,24 +13,57 @@
 - name: Turn off usbip
   ansible.builtin.import_tasks: usbip-off.yml
 
+- name: Install Podman
+  ansible.builtin.apt:
+    name: [podman, crun]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# The server from before it ran in a container: its unit in /etc would hide
+# the one Quadlet generates.
+- name: Look for the old native unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/virtualhere.service
+  register: virtualhere_native_unit
+
+- name: Stop the old native server
+  ansible.builtin.systemd_service:
+    name: virtualhere
+    state: stopped
+    enabled: false
+  when: virtualhere_native_unit.stat.exists
+
+- name: Remove the old native server
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/virtualhere.service
+    - /usr/local/sbin/vhusbdarm64
+  notify: Reload systemd
+
+- name: Create the binary and config folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ virtualhere_binary_dir }}"
+    - "{{ virtualhere_config_dir }}"
+
 - name: Download the VirtualHere server
   ansible.builtin.get_url:
     url: "{{ virtualhere_binary_url }}"
-    dest: "{{ virtualhere_binary }}"
+    dest: "{{ virtualhere_binary_dir }}/vhusbdarm64"
     checksum: "{{ virtualhere_binary_checksum | default(omit, true) }}"
     force: "{{ virtualhere_update | bool }}"
     owner: root
     group: root
     mode: "0755"
   notify: Restart VirtualHere
-
-- name: Create the config folder
-  ansible.builtin.file:
-    path: "{{ virtualhere_config_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0700"
 
 - name: Install the config merge script
   ansible.builtin.copy:
@@ -50,14 +83,28 @@
   no_log: true  # may hold the licence key
   notify: Restart VirtualHere
 
-- name: Install the systemd unit
+- name: Create the Quadlet folder for system containers
+  ansible.builtin.file:
+    path: /etc/containers/systemd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the Quadlet container unit
   ansible.builtin.template:
-    src: virtualhere.service.j2
-    dest: /etc/systemd/system/virtualhere.service
+    src: virtualhere.container.j2
+    dest: /etc/containers/systemd/virtualhere.container
     owner: root
     group: root
     mode: "0644"
   notify: [Reload systemd, Restart VirtualHere]
+
+- name: Pull newer base images daily
+  ansible.builtin.systemd_service:
+    name: podman-auto-update.timer
+    enabled: "{{ virtualhere_auto_update | bool }}"
+    state: "{{ (virtualhere_auto_update | bool) | ternary('started', 'stopped') }}"
 
 - name: Open the VirtualHere port to the LAN
   ansible.builtin.template:
@@ -68,13 +115,10 @@
     mode: "0644"
   notify: Reload nftables
 
-- name: Flush handlers so the unit exists before enabling
+# Quadlet units start at boot from their [Install] section; systemctl enable
+# doesn't apply to generated units.
+- name: Flush handlers so the unit exists before starting
   ansible.builtin.meta: flush_handlers
-
-- name: Enable VirtualHere
-  ansible.builtin.systemd_service:
-    name: virtualhere
-    enabled: true
 
 - name: Start VirtualHere
   ansible.builtin.systemd_service:
