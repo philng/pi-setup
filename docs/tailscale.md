@@ -60,7 +60,7 @@ Put these in `ansible/inventory/group_vars/pis.yml`, or `host_vars/<pi>.yml` for
 
 | Variable | Default | |
 | --- | --- | --- |
-| `tailscale_ssh` | `false` | Turn on [Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh): logins over the tailnet checked by your access rules instead of SSH keys. Plain SSH with your key works over the tailnet without it |
+| `tailscale_ssh` | `false` (`true` in this repo's `group_vars/pis.yml`) | [Tailscale SSH](#tailscale-ssh): logins over the tailnet checked by your access rules instead of SSH keys. Plain SSH with your key works over the tailnet without it |
 | `tailscale_firewall_trust_tailnet` | `true` | `false`: let in only SSH from the tailnet, not every port |
 | `tailscale_login_wait` | `300` | Seconds `make apply` waits for you to open a Pi's login link. `0`: print it and carry on |
 | `tailscale_hostname` | inventory name | The Pi's name in the tailnet and in MagicDNS |
@@ -82,6 +82,52 @@ Tailscale's servers for a real login link and checks the Pi is waiting on it, wi
 wait turned off so nothing hangs: the run warns instead of failing, and a second run
 changes nothing. Opening the link needs your tailnet, so that part is in the smoke test.
 
+## Tailscale SSH
+
+This repo turns on [Tailscale SSH](https://tailscale.com/kb/1193/tailscale-ssh)
+(`tailscale_ssh: true` in `group_vars/pis.yml`). An SSH connection that reaches a Pi
+over the tailnet is then let in by your Tailscale login and the tailnet policy, not
+by a key, so every computer signed in to your tailnet can run `make ping` and
+`make apply`: a laptop needs Tailscale, not its key in `secrets/authorized_keys`.
+SSH over the LAN is unchanged and still takes keys only, so a Pi stays reachable
+when Tailscale is down.
+
+**Once, in the admin console:** open [Access controls](https://login.tailscale.com/admin/acls)
+and check the `ssh` section has an `accept` rule for your own devices, for example:
+
+```json
+"ssh": [
+  {
+    "action": "accept",
+    "src":    ["autogroup:member"],
+    "dst":    ["autogroup:self"],
+    "users":  ["autogroup:nonroot", "root"]
+  }
+]
+```
+
+A new tailnet's default policy has the same rule with `"action": "check"`, which
+lets you in only after you re-confirm in a browser every 12 hours. Ansible can't
+open that page, so a run stalls on the first Pi that asks. With `check` you can
+still go first with `ssh admin@octopi exit`, open the link it prints, then run
+`make apply` within the 12 hours. `autogroup:self` covers Pis logged in with your
+own account, which is what the login link does; a Pi joined with a tagged auth key
+needs a rule naming that tag in `dst`.
+
+**Turning it on** needs one `make apply` from a computer the Pis already trust (its
+key is in their `authorized_keys`, or it is on the LAN with such a key). After that:
+
+```bash
+tailscale status          # this computer is on the tailnet
+ping -c1 octopi           # the name gives a 100.x.y.z (tailnet) address
+make ping
+```
+
+If the name gives a LAN address (192.168..., 10...), SSH goes over the LAN and wants
+a key again. Use the tailnet name instead, for example
+`ssh admin@octopi.<your-tailnet>.ts.net` (shown in the admin console under
+**DNS**), or turn on **Use Tailscale DNS** in the Tailscale app.
+
 ## Smoke test on the real Pis
 
 - [ ] `make apply` prints a login link for each Pi; opening it and clicking
@@ -92,11 +138,14 @@ changes nothing. Opening the link needs your tailnet, so that part is in the smo
 - [ ] `make apply` again: `changed=0`, and no login link is printed
 - [ ] `ssh admin@pilab-living` and `ssh admin@pilab-rack` still work from the LAN, without Tailscale on your computer
 - [ ] From a computer on the tailnet but not on your LAN (e.g. a laptop on a phone
-      hotspot): `ssh admin@octopi` logs in with your key
+      hotspot): `ssh admin@octopi` logs in
 - [ ] From that computer, <http://octopi> loads OctoPrint
 - [ ] `tailscale ping octopi` from that computer eventually says `via <ip>:41641`
       (a direct connection, not `via DERP`)
 - [ ] OctoEverywhere still shows the printer online on octoeverywhere.com
 - [ ] `make health` shows `Tailscale: Running` for each Pi
-- [ ] Optional, with `tailscale_ssh: true`: after `make apply`, `ssh admin@octopi`
-      over the tailnet is let in by your tailnet's SSH access rules
+- [ ] With `tailscale_ssh: true`, from a computer whose key is NOT in
+      `secrets/authorized_keys` (e.g. a Mac on the tailnet): `make ping` answers
+      `pong` for every Pi, and `make apply` runs without a browser prompt
+- [ ] From that computer on the LAN, by the Pi's LAN IP: `ssh admin@<ip>` is still
+      refused (`Permission denied (publickey)`), so the LAN still needs a key

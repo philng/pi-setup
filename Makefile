@@ -88,16 +88,17 @@ $(COLLECTIONS)-dev: | $(COLLECTIONS)
 
 # Only the Pis in ansible/inventory/hosts.yml are contacted: make new-pi adds each
 # one as you set it up, so a Pi you don't have yet is never tried. Exit code 4
-# means a Pi was UNREACHABLE: say what to do about that.
+# means a Pi was UNREACHABLE: scripts/ssh-hints.sh reads the output and says why
+# (name not found, key not accepted, host key changed, no answer) and what to do.
 ping: deps ## Check the Pis are reachable over SSH
-	@cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible $(or $(LIMIT),pis) -m ansible.builtin.ping || { rc=$$?; \
-	  [ $$rc -ne 4 ] || { echo; \
-	  echo "A Pi above didn't answer. If you haven't set it up yet, remove it from"; \
-	  echo "ansible/inventory/hosts.yml (make new-pi adds it back later)."; \
-	  echo "To check just one Pi: make ping LIMIT=octopi"; }; exit $$rc; }
+	@t=$$(mktemp -d); \
+	  { cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible $(or $(LIMIT),pis) -m ansible.builtin.ping; echo $$? > "$$t/rc"; } 2>&1 | tee "$$t/out"; \
+	  rc=$$(cat "$$t/rc"); [ "$$rc" -ne 4 ] || $(CURDIR)/scripts/ssh-hints.sh "$$t/out"; \
+	  rm -r "$$t"; exit $$rc
 
 apply: deps ## Configure the Pis
-	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook site.yml $(LIMIT_ARG)
+	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook site.yml $(LIMIT_ARG) || { rc=$$?; \
+	  [ $$rc -ne 4 ] || echo "A Pi was unreachable: make ping says why."; exit $$rc; }
 
 check: deps ## Dry run with diff (a Pi needs one real make apply first)
 	cd $(ANSIBLE_DIR) && $(VENV)/bin/ansible-playbook site.yml --check --diff $(LIMIT_ARG)
