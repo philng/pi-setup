@@ -106,6 +106,11 @@ and check the `ssh` section has an `accept` rule for your own devices, for examp
 ]
 ```
 
+To check which one you have: `ssh admin@octopi true` over the tailnet returns at
+once with `accept`, and prints a `login.tailscale.com` link and waits with `check`.
+In `make apply`, `check` shows up as *Timeout waiting for privilege escalation
+prompt* at **Wait until Ansible can log in again**.
+
 A new tailnet's default policy has the same rule with `"action": "check"`, which
 lets you in only after you re-confirm in a browser every 12 hours. Ansible can't
 open that page, so a run stalls on the first Pi that asks. With `check` you can
