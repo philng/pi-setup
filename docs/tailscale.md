@@ -115,7 +115,11 @@ own account, which is what the login link does; a Pi joined with a tagged auth k
 needs a rule naming that tag in `dst`.
 
 **Turning it on** needs one `make apply` from a computer the Pis already trust (its
-key is in their `authorized_keys`, or it is on the LAN with such a key). After that:
+key is in their `authorized_keys`). If that computer reaches the Pis over the
+tailnet, switching cuts Ansible's own SSH session: the role switches in the
+background, reconnects (now through Tailscale SSH, so the `accept` rule must be in
+place first) and carries on. If it can't log in again, it stops with a message
+pointing here. After that:
 
 ```bash
 tailscale status          # this computer is on the tailnet

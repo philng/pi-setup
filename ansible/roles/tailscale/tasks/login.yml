@@ -120,7 +120,44 @@
   changed_when: false
   check_mode: false
 
-- name: Turn Tailscale SSH {{ 'on' if tailscale_ssh | bool else 'off' }}
-  ansible.builtin.command: tailscale set --ssh={{ tailscale_ssh | bool | lower }}
-  changed_when: true
-  when: (tailscale_prefs.stdout | from_json).RunSSH | default(false) | bool != tailscale_ssh | bool
+# When Ansible itself is connected over the tailnet, switching Tailscale SSH
+# hands port 22 on the tailnet address to (or back from) tailscaled, which cuts
+# this very SSH session. `tailscale set` refuses unless told --accept-risk, and
+# even then its answer would be lost with the session. So it runs detached (async,
+# not polled) a moment after the task returns; then Ansible drops its old
+# connection and waits until it can log in again, now through Tailscale SSH.
+- name: Switch Tailscale SSH {{ 'on' if tailscale_ssh | bool else 'off' }}
+  when:
+    - (tailscale_prefs.stdout | from_json).RunSSH | default(false) | bool != tailscale_ssh | bool
+    - not ansible_check_mode  # async can't run in check mode
+  block:
+    - name: Turn Tailscale SSH {{ 'on' if tailscale_ssh | bool else 'off' }}
+      ansible.builtin.shell: >-
+        sleep 2 && tailscale set --ssh={{ tailscale_ssh | bool | lower }} --accept-risk=lose-ssh
+      async: 60
+      poll: 0
+      changed_when: true
+
+    - name: Drop the SSH connection that Tailscale SSH may have cut
+      ansible.builtin.meta: reset_connection
+
+    - name: Wait until Ansible can log in again
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 90
+  rescue:
+    - name: Explain the lost connection
+      ansible.builtin.fail:
+        msg: >-
+          {{ inventory_hostname }} turned Tailscale SSH {{ 'on' if tailscale_ssh | bool else 'off' }},
+          but Ansible couldn't log in again over the tailnet afterwards. Usually the
+          tailnet policy has no "accept" SSH rule for you (the default "check" rule
+          waits for a browser), see docs/tailscale.md#tailscale-ssh. Fix the
+          policy and run make apply again; SSH over the LAN with your key still works.
+
+- name: Check Tailscale SSH is {{ 'on' if tailscale_ssh | bool else 'off' }}
+  ansible.builtin.command: tailscale debug prefs
+  register: tailscale_prefs_after
+  changed_when: false
+  failed_when: (tailscale_prefs_after.stdout | from_json).RunSSH | default(false) | bool != tailscale_ssh | bool
+  when: not ansible_check_mode
