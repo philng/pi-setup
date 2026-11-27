@@ -150,10 +150,16 @@
       ansible.builtin.fail:
         msg: >-
           {{ inventory_hostname }} turned Tailscale SSH {{ 'on' if tailscale_ssh | bool else 'off' }},
-          but Ansible couldn't log in again over the tailnet afterwards. Usually the
-          tailnet policy has no "accept" SSH rule for you (the default "check" rule
-          waits for a browser), see docs/tailscale.md#tailscale-ssh. Fix the
-          policy and run make apply again; SSH over the LAN with your key still works.
+          but Ansible couldn't log in again over the tailnet afterwards
+          ({{ ansible_failed_result.msg | default('no answer') }}).
+          {{ 'Tailscale let the connection in but held it for a browser check:'
+             ~ ' your tailnet policy SSH rule has "action": "check".'
+             if 'privilege escalation' in (ansible_failed_result.msg | default(''))
+             else 'Usually the tailnet policy has no "accept" SSH rule for you.' }}
+          Change the rule to "action": "accept" (docs/tailscale.md#tailscale-ssh) and run make apply again.
+          To see it yourself: ssh {{ ansible_user }}@{{ ansible_host | default(inventory_hostname) }} true
+          prints a login.tailscale.com link while the rule is "check".
+          SSH over the LAN with your key still works.
 
 - name: Check Tailscale SSH is {{ 'on' if tailscale_ssh | bool else 'off' }}
   ansible.builtin.command: tailscale debug prefs
